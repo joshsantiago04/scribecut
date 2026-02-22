@@ -15,7 +15,7 @@ const isDev = !app.isPackaged;
 let pyProcess = null;
 
 function startPythonServer() {
-  const pythonPath = path.join(__dirname, '..', 'backend', 'venv', 'bin', 'python3');
+  const pythonPath = path.join(__dirname, '..', 'venv', 'bin', 'python3');
   const serverPath = path.join(__dirname, '..', 'backend', 'server.py');
 
   pyProcess = spawn(pythonPath, [serverPath], {
@@ -158,6 +158,14 @@ ipcMain.handle('dialog:open-file', async () => {
     ],
   });
   return filePaths.length > 0 ? filePaths : null;
+});
+
+ipcMain.handle('dialog:open-directory', async () => {
+  const { filePaths } = await dialog.showOpenDialog({
+    defaultPath: os.homedir(),
+    properties: ['openDirectory', 'createDirectory'],
+  });
+  return filePaths.length > 0 ? filePaths[0] : null;
 });
 
 // ── App events ───────────────────────────────────────────────────────────────

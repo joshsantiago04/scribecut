@@ -13,12 +13,10 @@ export default function BottomPanel({
     timestamps,
     segments,
     onTimestampClick,
+    onAddToExport,
 }) {
     const [activeTab, setActiveTab] = useState(0);
 
-    // Split current "timestamps" into two buckets:
-    // - audio clips: no text
-    // - transcript matches: has text
     const audioClips = (timestamps || []).filter(
         (ts) => typeof ts.text !== "string" || ts.text.trim() === "",
     );
@@ -42,49 +40,61 @@ export default function BottomPanel({
             </div>
 
             <div className="bottom-content">
-                {/* TAB 0: Timestamps (AUDIO CLIPS ONLY) */}
+                {/* TAB 0: Audio Detect clips */}
                 {activeTab === 0 &&
                     (audioClips.length > 0 ? (
                         audioClips.map((ts, i) => (
-                            <div
-                                key={i}
-                                className="timestamp-item"
-                                onClick={() => onTimestampClick(ts.start)}
-                            >
-                                <span className="timestamp-time">
-                                    [{formatTime(ts.start)} –{" "}
-                                    {formatTime(ts.end)}]
+                            <div key={i} className="timestamp-item">
+                                <span
+                                    className="timestamp-time"
+                                    onClick={() => onTimestampClick(ts.start)}
+                                >
+                                    [{formatTime(ts.start)} – {formatTime(ts.end)}]
                                 </span>
+                                <button
+                                    className="add-to-export-btn"
+                                    title="Add to export queue"
+                                    onClick={() => onAddToExport({ start: ts.start, end: ts.end })}
+                                >
+                                    +
+                                </button>
                             </div>
                         ))
                     ) : (
                         <div className="timestamp-text">
-                            Auto-detect notable peaks in volume. Useful for
-                            finding louder moments, especially in gaming.
+                            Auto-detect notable peaks in volume. Useful for finding louder
+                            moments, especially in gaming.
                         </div>
                     ))}
 
-                {/* TAB 1: Transcript (SEARCH MATCHES IF PRESENT, ELSE FULL TRANSCRIPT) */}
+                {/* TAB 1: Transcript — search matches if present, else full transcript */}
                 {activeTab === 1 &&
                     (segments && segments.length > 0 ? (
                         <div style={{ lineHeight: "1.6" }}>
-                            {(transcriptMatches.length > 0
-                                ? transcriptMatches
-                                : segments
-                            ).map((s, i) => (
-                                <div
-                                    key={i}
-                                    className="timestamp-item"
-                                    onClick={() => onTimestampClick(s.start)}
-                                >
-                                    <span className="timestamp-text">
-                                        {s.text}
-                                    </span>{" "}
-                                    <span className="timestamp-time">
-                                        ({formatTime(s.start)})
-                                    </span>
-                                </div>
-                            ))}
+                            {(transcriptMatches.length > 0 ? transcriptMatches : segments).map(
+                                (s, i) => (
+                                    <div key={i} className="timestamp-item">
+                                        <span
+                                            className="timestamp-text"
+                                            onClick={() => onTimestampClick(s.start)}
+                                        >
+                                            {s.text}
+                                        </span>
+                                        <span className="timestamp-time">
+                                            ({formatTime(s.start)})
+                                        </span>
+                                        <button
+                                            className="add-to-export-btn"
+                                            title="Add to export queue"
+                                            onClick={() =>
+                                                onAddToExport({ start: s.start, end: s.end })
+                                            }
+                                        >
+                                            +
+                                        </button>
+                                    </div>
+                                ),
+                            )}
                         </div>
                     ) : (
                         <div className="timestamp-text">

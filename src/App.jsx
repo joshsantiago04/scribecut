@@ -18,6 +18,8 @@ export default function App() {
         },
     ]);
     const [timestamps, setTimestamps] = useState([]);
+    const [outputDir, setOutputDir] = useState("");
+    const [exportQueue, setExportQueue] = useState([]);
 
     const videoRef = useRef(null);
 
@@ -186,6 +188,60 @@ export default function App() {
         }
     };
 
+    const handleSelectOutputDir = async () => {
+        if (!window.electronAPI) return;
+        const dir = await window.electronAPI.openDirectory?.();
+        if (dir) setOutputDir(dir);
+    };
+
+    const handleAddToExport = ({ start, end }) => {
+        const video = videos[activeVideo];
+        if (!video) return;
+        setExportQueue((prev) => [
+            ...prev,
+            {
+                id: `${Date.now()}-${Math.random()}`,
+                videoPath: video.path,
+                videoName: video.name,
+                start,
+                end,
+            },
+        ]);
+    };
+
+    const handleUpdateClip = (id, field, value) => {
+        setExportQueue((prev) =>
+            prev.map((clip) => (clip.id === id ? { ...clip, [field]: value } : clip)),
+        );
+    };
+
+    const handleRemoveClip = (id) => {
+        setExportQueue((prev) => prev.filter((clip) => clip.id !== id));
+    };
+
+    const handleExport = async () => {
+        if (!outputDir || exportQueue.length === 0) return;
+        setMessages([{ type: "system", text: `Exporting ${exportQueue.length} clip(s)...` }]);
+        const clips = exportQueue.map((clip, i) => ({
+            videoPath: clip.videoPath,
+            start: clip.start,
+            end: clip.end,
+            filename: `${clip.videoName.replace(/\.[^/.]+$/, "")}_clip_${i + 1}.mp4`,
+        }));
+        try {
+            const r = await fetch(`${API}/export`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ clips, outputDir }),
+            });
+            const data = await r.json();
+            setMessages([{ type: "system", text: `Exported ${data.exported.length} clip(s).` }]);
+            setExportQueue([]);
+        } catch (err) {
+            setMessages([{ type: "system", text: `Export failed: ${err.message}` }]);
+        }
+    };
+
     const handleTimestampClick = (start) => {
         if (videoRef.current) {
             videoRef.current.currentTime = start;
@@ -211,11 +267,18 @@ export default function App() {
                 query={searchQuery}
                 onQueryChange={setSearchQuery}
                 messages={messages}
+                exportQueue={exportQueue}
+                outputDir={outputDir}
+                onSelectOutputDir={handleSelectOutputDir}
+                onUpdateClip={handleUpdateClip}
+                onRemoveClip={handleRemoveClip}
+                onExport={handleExport}
             />
             <BottomPanel
                 timestamps={timestamps}
                 segments={segments}
                 onTimestampClick={handleTimestampClick}
+                onAddToExport={handleAddToExport}
             />
         </>
     );

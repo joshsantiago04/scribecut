@@ -1,0 +1,32 @@
+# ── System Requirements ────────────────────────────────────────────────────────
+# These must be installed on your machine before running anything.
+#
+#   Node.js   v18+       https://nodejs.org
+#   Python    3.10+      https://www.python.org
+#   ffmpeg    (any)      https://ffmpeg.org  — must be available on PATH
+
+# ── Frontend / Electron (Node) ────────────────────────────────────────────────
+# Managed by package.json. Install with:
+#
+#   npm install
+#
+# Packages:
+#   react
+#   react-dom
+#   vite
+#   @vitejs/plugin-react
+#   electron
+
+# ── Backend (Python) ──────────────────────────────────────────────────────────
+# Managed by backend/requirements.txt. Install with:
+#
+#   pip install -r backend/requirements.txt
+#
+# Packages:
+#   faster-whisper    (speech-to-text transcription)
+#   rapidfuzz         (fuzzy text search)
+#   fastapi           (HTTP API framework)
+#   uvicorn           (ASGI server)
+#   numpy             (audio array operations)
+#   librosa           (audio feature extraction)
+#   scipy             (signal processing / peak detection)

@@ -73,13 +73,13 @@ if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
       `powershell.exe -NoProfile -Sta -EncodedCommand ${encoded}`
     );
     const winPaths = stdout.trim().split(/\r?\n/).filter(Boolean);
-    if (!winPaths.length) return null;
+    if (!winPaths.length) return []; // user cancelled — dialog worked, just no selection
     const wslPaths = await Promise.all(
       winPaths.map(p =>
         execFileAsync('wslpath', ['-u', p]).then(({ stdout: s }) => s.trim())
       )
     );
-    return wslPaths.length > 0 ? wslPaths : null;
+    return wslPaths;
   } catch (e) {
     console.error('Windows dialog failed, falling back to GTK:', e.message);
     return null;
@@ -128,7 +128,10 @@ ipcMain.on('window:close', () => BrowserWindow.getFocusedWindow()?.close());
 ipcMain.handle('dialog:open-file', async () => {
   if (_isWSL) {
     const result = await openWindowsFileDialog();
-    if (result !== null) return result;
+    // null  = PowerShell failed → fall through to GTK
+    // []    = user cancelled cleanly → stop here, return null to renderer
+    // [...] = files selected → return them
+    if (result !== null) return result.length > 0 ? result : null;
   }
   const { filePaths } = await dialog.showOpenDialog({
     defaultPath: _isWSL ? getWindowsHome() : os.homedir(),

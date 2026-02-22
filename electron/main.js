@@ -8,6 +8,8 @@ const { promisify } = require('util');
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
 
+const isDev = !app.isPackaged;
+
 // ── WSL helpers ──────────────────────────────────────────────────────────────
 
 function isWSL() {
@@ -66,15 +68,12 @@ if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
 }
 `;
   try {
-    // Base64-encode the script to avoid all quoting/UNC path issues
     const encoded = Buffer.from(psCode, 'utf16le').toString('base64');
     const { stdout } = await execAsync(
       `powershell.exe -NoProfile -Sta -EncodedCommand ${encoded}`
     );
     const winPaths = stdout.trim().split(/\r?\n/).filter(Boolean);
     if (!winPaths.length) return null;
-
-    // Convert Windows paths (C:\...) to WSL paths (/mnt/c/...)
     const wslPaths = await Promise.all(
       winPaths.map(p =>
         execFileAsync('wslpath', ['-u', p]).then(({ stdout: s }) => s.trim())
@@ -93,7 +92,7 @@ if (_isWSL) {
   app.commandLine.appendSwitch('disable-gpu-sandbox');
 }
 
-// ── App setup ────────────────────────────────────────────────────────────────
+// ── Window creation ──────────────────────────────────────────────────────────
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -109,10 +108,15 @@ function createWindow() {
     },
   });
 
-  win.loadFile('index.html');
+  if (isDev) {
+    win.loadURL('http://localhost:5173');
+  } else {
+    win.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
+  }
 }
 
-// Window controls
+// ── IPC handlers ─────────────────────────────────────────────────────────────
+
 ipcMain.on('window:minimize', () => BrowserWindow.getFocusedWindow()?.minimize());
 ipcMain.on('window:maximize', () => {
   const win = BrowserWindow.getFocusedWindow();
@@ -125,7 +129,6 @@ ipcMain.handle('dialog:open-file', async () => {
   if (_isWSL) {
     const result = await openWindowsFileDialog();
     if (result !== null) return result;
-    // Fall through to GTK dialog if PowerShell failed
   }
   const { filePaths } = await dialog.showOpenDialog({
     defaultPath: _isWSL ? getWindowsHome() : os.homedir(),
@@ -137,6 +140,8 @@ ipcMain.handle('dialog:open-file', async () => {
   return filePaths.length > 0 ? filePaths : null;
 });
 
+// ── App events ───────────────────────────────────────────────────────────────
+
 app.whenReady().then(() => {
   if (_isWSL) addWindowsGtkBookmarks(getWindowsHome());
   createWindow();
@@ -144,4 +149,8 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
+});
+
+app.on('activate', () => {
+  if (BrowserWindow.getAllWindows().length === 0) createWindow();
 });

@@ -1,0 +1,7 @@
+faster-whisper
+rapidfuzz
+fastapi
+uvicorn
+numpy
+librosa
+scipy

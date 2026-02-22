@@ -18,6 +18,7 @@ export default function App() {
         },
     ]);
     const [timestamps, setTimestamps] = useState([]);
+    const [outputDir, setOutputDir] = useState("");
 
     const videoRef = useRef(null);
 
@@ -186,6 +187,12 @@ export default function App() {
         }
     };
 
+    const handleSelectOutputDir = async () => {
+        if (!window.electronAPI) return;
+        const dir = await window.electronAPI.openDirectory?.();
+        if (dir) setOutputDir(dir);
+    };
+
     const handleTimestampClick = (start) => {
         if (videoRef.current) {
             videoRef.current.currentTime = start;
@@ -211,6 +218,8 @@ export default function App() {
                 query={searchQuery}
                 onQueryChange={setSearchQuery}
                 messages={messages}
+                outputDir={outputDir}
+                onSelectOutputDir={handleSelectOutputDir}
             />
             <BottomPanel
                 timestamps={timestamps}

@@ -2,10 +2,12 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
+import subprocess
+import os
 
 import transcribe as transcribe_module
 import search as search_module
-import peaks as peaks_module  # NEW
+import peaks as peaks_module
 
 app = FastAPI()
 
@@ -35,14 +37,6 @@ class SearchRequest(BaseModel):
     segments: list[Segment]
 
 
-class PeaksRequest(BaseModel):  # NEW
-    path: str
-    pre_pad: float = 20.0
-    post_pad: float = 10.0
-    min_prominence_db: float = 8.0
-    min_gap_s: float = 30.0
-
-
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @app.post("/transcribe")
@@ -64,6 +58,14 @@ def search(req: SearchRequest):
     return {"results": results}
 
 
+class PeaksRequest(BaseModel):
+    path: str
+    pre_pad: float = 20.0
+    post_pad: float = 10.0
+    min_prominence_db: float = 8.0
+    min_gap_s: float = 30.0
+
+
 @app.post("/peaks")
 def peaks(req: PeaksRequest):
     """Detect loud audio peaks and return clip candidates."""
@@ -78,6 +80,44 @@ def peaks(req: PeaksRequest):
         return {"clips": clips}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+class ExportClip(BaseModel):
+    videoPath: str
+    start: float
+    end: float
+    filename: str
+
+
+class ExportRequest(BaseModel):
+    clips: list[ExportClip]
+    outputDir: str
+
+
+@app.post("/export")
+def export_clips(req: ExportRequest):
+    """Trim and save each clip using ffmpeg."""
+    os.makedirs(req.outputDir, exist_ok=True)
+    exported = []
+    for clip in req.clips:
+        out_path = os.path.join(req.outputDir, clip.filename)
+        try:
+            subprocess.run(
+                [
+                    "ffmpeg", "-y",
+                    "-i", clip.videoPath,
+                    "-ss", str(clip.start),
+                    "-to", str(clip.end),
+                    "-c", "copy",
+                    out_path,
+                ],
+                check=True,
+                capture_output=True,
+            )
+            exported.append(out_path)
+        except subprocess.CalledProcessError as e:
+            raise HTTPException(status_code=500, detail=e.stderr.decode())
+    return {"exported": exported}
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────

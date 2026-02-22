@@ -1,0 +1,12 @@
+{
+  "name": "video-editor",
+  "version": "1.0.0",
+  "description": "Video editor with transcript search and audio peak detection",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron --no-sandbox ."
+  },
+  "devDependencies": {
+    "electron": "^34.0.0"
+  }
+}

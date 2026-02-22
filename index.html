@@ -15,14 +15,64 @@
       height: 100vh;
       display: grid;
       grid-template-columns: 200px 1fr 300px;
-      grid-template-rows: 1fr 160px;
+      grid-template-rows: 32px 1fr 160px;
       grid-template-areas:
-        "sidebar main right"
-        "sidebar bottom right";
+        "titlebar titlebar titlebar"
+        "sidebar  main    right"
+        "sidebar  bottom  right";
       background: #1e1e1e;
       color: #cccccc;
       overflow: hidden;
       user-select: none;
+    }
+
+    /* ── Titlebar ── */
+    .titlebar {
+      grid-area: titlebar;
+      background: #1a1a1a;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 8px 0 12px;
+      border-bottom: 1px solid #111;
+      -webkit-app-region: drag;
+    }
+
+    .titlebar-title {
+      font-size: 11px;
+      color: #666;
+      letter-spacing: 0.5px;
+    }
+
+    .titlebar-controls {
+      display: flex;
+      gap: 2px;
+      -webkit-app-region: no-drag;
+    }
+
+    .titlebar-btn {
+      width: 30px;
+      height: 24px;
+      background: transparent;
+      border: none;
+      color: #888;
+      font-size: 13px;
+      cursor: pointer;
+      border-radius: 3px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.1s, color 0.1s;
+    }
+
+    .titlebar-btn:hover {
+      background: #333;
+      color: #fff;
+    }
+
+    .titlebar-btn.close:hover {
+      background: #c0392b;
+      color: #fff;
     }
 
     /* ── Sidebar ── */
@@ -316,6 +366,16 @@
 </head>
 <body>
 
+  <!-- Titlebar -->
+  <div class="titlebar">
+    <span class="titlebar-title">Video Editor</span>
+    <div class="titlebar-controls">
+      <button class="titlebar-btn" id="btn-minimize">&#8212;</button>
+      <button class="titlebar-btn" id="btn-maximize">&#9633;</button>
+      <button class="titlebar-btn close" id="btn-close">&#10005;</button>
+    </div>
+  </div>
+
   <!-- Left Sidebar -->
   <div class="sidebar">
     <button class="upload-btn">+ Upload Video</button>
@@ -359,21 +419,92 @@
       <div class="bottom-tab">Transcript</div>
       <div class="bottom-tab">Console</div>
     </div>
-    <div class="bottom-content">
-      <div class="timestamp-item">
-        <span class="timestamp-time">[00:12]</span>
-        <span class="timestamp-text">Example transcript line</span>
-      </div>
-      <div class="timestamp-item">
-        <span class="timestamp-time">[01:45]</span>
-        <span class="timestamp-text">Another result</span>
-      </div>
-      <div class="timestamp-item">
-        <span class="timestamp-time">[03:22]</span>
-        <span class="timestamp-text">Keyword match found here</span>
-      </div>
+    <div class="bottom-content" id="bottom-content">
+      <div class="video-list-empty">Upload a video to see timestamps.</div>
     </div>
   </div>
 
+  <script>
+    // Titlebar window controls
+    document.getElementById('btn-minimize').addEventListener('click', () => window.electronAPI.minimize());
+    document.getElementById('btn-maximize').addEventListener('click', () => window.electronAPI.maximize());
+    document.getElementById('btn-close').addEventListener('click',    () => window.electronAPI.close());
+
+    const uploadBtn = document.querySelector('.upload-btn');
+    const videoList = document.querySelector('.video-list');
+    const videoContainer = document.querySelector('.video-container');
+    const placeholder = document.querySelector('.video-placeholder');
+
+    let videos = []; // { name, path }
+    let activeIndex = -1;
+
+    function toFileUrl(filePath) {
+      return 'file://' + filePath.replace(/\\/g, '/');
+    }
+
+    function loadVideo(index) {
+      activeIndex = index;
+      const v = videos[index];
+
+      // Update sidebar active state
+      document.querySelectorAll('.video-list-item').forEach((el, i) => {
+        el.classList.toggle('active', i === index);
+      });
+
+      // Show the video element, hide placeholder
+      placeholder.style.display = 'none';
+      let videoEl = videoContainer.querySelector('video');
+      if (!videoEl) {
+        videoEl = document.createElement('video');
+        videoEl.controls = true;
+        videoContainer.appendChild(videoEl);
+      }
+      videoEl.src = toFileUrl(v.path);
+      videoEl.load();
+    }
+
+    function addVideo(filePath) {
+      if (videos.some(v => v.path === filePath)) return; // no duplicates
+
+      const name = filePath.split(/[\\/]/).pop();
+      const index = videos.length;
+      videos.push({ name, path: filePath });
+
+      // Remove empty-state label once we have a video
+      const emptyEl = videoList.querySelector('.video-list-empty');
+      if (emptyEl) emptyEl.remove();
+
+      const item = document.createElement('div');
+      item.className = 'video-list-item';
+      item.textContent = name;
+      item.title = filePath;
+      item.addEventListener('click', () => loadVideo(index));
+      videoList.appendChild(item);
+
+      // Auto-load the first video added
+      if (videos.length === 1) loadVideo(0);
+    }
+
+    // Upload button → native file dialog
+    uploadBtn.addEventListener('click', async () => {
+      const filePaths = await window.electronAPI.openFile();
+      if (filePaths) filePaths.forEach(addVideo);
+    });
+
+    // Drag-and-drop onto the main video area
+    const main = document.querySelector('.main');
+    main.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+    main.addEventListener('drop', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const files = Array.from(e.dataTransfer.files).filter(f =>
+        f.type.startsWith('video/') || /\.(mp4|mov|avi|mkv|webm|flv|m4v)$/i.test(f.name)
+      );
+      files.forEach(f => addVideo(f.path));
+    });
+  </script>
 </body>
 </html>

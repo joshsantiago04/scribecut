@@ -1,7 +1,7 @@
 export default function SearchPanel({ query, onQueryChange, messages }) {
   return (
     <div className="right">
-      <div className="right-header">Search</div>
+      <div className="right-header">Search Transcript</div>
       <div className="search-container">
         <input
           className="search-input"

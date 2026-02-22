@@ -2,13 +2,30 @@ const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { exec, execFile } = require('child_process');
+const { exec, execFile, spawn } = require('child_process');
 const { promisify } = require('util');
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
 
 const isDev = !app.isPackaged;
+
+// ── Python backend ────────────────────────────────────────────────────────────
+
+let pyProcess = null;
+
+function startPythonServer() {
+  const pythonPath = path.join(__dirname, '..', 'backend', 'venv', 'bin', 'python3');
+  const serverPath = path.join(__dirname, '..', 'backend', 'server.py');
+
+  pyProcess = spawn(pythonPath, [serverPath], {
+    cwd: path.join(__dirname, '..', 'backend'),
+  });
+
+  pyProcess.stdout.on('data', (data) => console.log('[python]', data.toString().trim()));
+  pyProcess.stderr.on('data', (data) => console.error('[python]', data.toString().trim()));
+  pyProcess.on('exit', (code) => console.log('[python] exited with code', code));
+}
 
 // ── WSL helpers ──────────────────────────────────────────────────────────────
 
@@ -147,11 +164,16 @@ ipcMain.handle('dialog:open-file', async () => {
 
 app.whenReady().then(() => {
   if (_isWSL) addWindowsGtkBookmarks(getWindowsHome());
+  startPythonServer();
   createWindow();
 });
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
+});
+
+app.on('will-quit', () => {
+  pyProcess?.kill();
 });
 
 app.on('activate', () => {

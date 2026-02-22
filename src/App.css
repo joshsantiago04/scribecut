@@ -15,7 +15,7 @@ html, body {
 #root {
   height: 100vh;
   display: grid;
-  grid-template-columns: 200px 1fr 300px;
+  grid-template-columns: 240px 1fr 300px;
   grid-template-rows: 32px 1fr 220px;
   grid-template-areas:
     "titlebar titlebar titlebar"
@@ -101,6 +101,28 @@ html, body {
   background: #0098ff;
 }
 
+.transcribe-btn {
+  width: 100%;
+  padding: 8px 12px;
+  background: #2d6a4f;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.transcribe-btn:hover:not(:disabled) {
+  background: #40916c;
+}
+
+.transcribe-btn:disabled {
+  background: #2a2a2a;
+  color: #555;
+  cursor: default;
+}
+
 .video-list-label {
   font-size: 11px;
   font-weight: 600;
@@ -119,16 +141,33 @@ html, body {
 }
 
 .video-list-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
   padding: 6px 8px;
   font-size: 12px;
   color: #ccc;
   cursor: pointer;
   border-radius: 3px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   transition: background 0.1s;
 }
+
+.video-item-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-dot.status-pending     { background: #555; }
+.status-dot.status-transcribing { background: #e5c07b; }
+.status-dot.status-done        { background: #4ec9b0; }
 
 .video-list-item:hover {
   background: #2a2d2e;
@@ -167,8 +206,10 @@ html, body {
 }
 
 .video-container video {
-  width: 100%;
   display: block;
+  width: 100%;
+  max-height: calc(100vh - 32px - 220px - 32px); /* titlebar + bottom panel + main padding */
+  object-fit: contain;
   background: #111;
 }
 

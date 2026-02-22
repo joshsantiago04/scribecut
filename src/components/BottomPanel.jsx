@@ -2,7 +2,14 @@ import { useState } from 'react';
 
 const TABS = ['Timestamps', 'Transcript', 'Console'];
 
-export default function BottomPanel({ timestamps, onTimestampClick }) {
+function formatTime(seconds) {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  return [h, m, s].map(n => String(n).padStart(2, '0')).join(':');
+}
+
+export default function BottomPanel({ timestamps, segments, onTimestampClick }) {
   const [activeTab, setActiveTab] = useState(0);
 
   return (
@@ -24,14 +31,18 @@ export default function BottomPanel({ timestamps, onTimestampClick }) {
             <div
               key={i}
               className="timestamp-item"
-              onClick={() => onTimestampClick(ts.time)}
+              onClick={() => onTimestampClick(ts.start)}
             >
-              <span className="timestamp-time">[{ts.time}]</span>
+              <span className="timestamp-time">[{formatTime(ts.start)}]</span>
               <span className="timestamp-text">{ts.text}</span>
             </div>
           ))}
         {activeTab === 1 && (
-          <div className="timestamp-text">Transcript will appear here.</div>
+          segments && segments.length > 0
+            ? <div className="timestamp-text" style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6' }}>
+                {segments.map(s => s.text).join(' ')}
+              </div>
+            : <div className="timestamp-text">Transcript will appear here.</div>
         )}
         {activeTab === 2 && (
           <div className="timestamp-text">Console output will appear here.</div>

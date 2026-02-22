@@ -1,0 +1,20 @@
+{
+  "name": "video-editor",
+  "version": "1.0.0",
+  "description": "Video editor with transcript search and audio peak detection",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "vite",
+    "electron": "electron --no-sandbox .",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "electron": "^34.0.0",
+    "vite": "^6.0.0"
+  }
+}

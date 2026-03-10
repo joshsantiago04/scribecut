@@ -1,0 +1,64 @@
+name: Build & Release
+
+# Triggers when you push a version tag, e.g. git tag v1.0.0 && git push --tags
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            electron_args: --win
+          - os: macos-latest
+            electron_args: --mac
+          - os: ubuntu-22.04
+            electron_args: --linux
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── Python backend ──────────────────────────────────────────────────────
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies & PyInstaller
+        working-directory: backend
+        run: |
+          pip install pyinstaller
+          pip install -r requirements.txt
+
+      - name: Bundle Python backend (PyInstaller)
+        working-directory: backend
+        run: pyinstaller server.spec
+
+      # ── Electron app ────────────────────────────────────────────────────────
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Node dependencies
+        run: npm install
+
+      - name: Build frontend (Vite)
+        run: npm run build
+
+      # Linux needs these for electron-builder AppImage/deb packaging
+      - name: Install Linux packaging deps
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y fakeroot dpkg
+
+      - name: Package app with electron-builder
+        run: npx electron-builder ${{ matrix.electron_args }} --publish onTag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

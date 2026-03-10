@@ -15,38 +15,51 @@ const isDev = !app.isPackaged;
 let pyProcess = null;
 
 function startPythonServer() {
-    const ROOT = path.join(__dirname, ".."); // Hackathon2026/
-    const backendDir = path.join(ROOT, "backend");
+    let serverExec, serverArgs, serverCwd;
 
-    // support backend/venv or backend/.venv
-    const venvDir = fs.existsSync(path.join(backendDir, "venv"))
-        ? path.join(backendDir, "venv")
-        : path.join(backendDir, ".venv");
+    if (app.isPackaged) {
+        // Packaged app: use the bundled PyInstaller executable
+        const execName = process.platform === "win32" ? "server.exe" : "server";
+        serverExec = path.join(process.resourcesPath, "backend", execName);
+        serverArgs = [];
+        serverCwd = path.join(process.resourcesPath, "backend");
 
-    // cross-platform python path
-    const pythonPath =
-        process.platform === "win32"
-            ? path.join(venvDir, "Scripts", "python.exe")
-            : fs.existsSync(path.join(venvDir, "bin", "python3"))
-              ? path.join(venvDir, "bin", "python3")
-              : path.join(venvDir, "bin", "python");
+        if (!fs.existsSync(serverExec)) {
+            console.error("[python] bundled server not found:", serverExec);
+            return;
+        }
+    } else {
+        // Dev: use the venv python
+        const ROOT = path.join(__dirname, ".."); // Hackathon2026/
+        const backendDir = path.join(ROOT, "backend");
 
-    const serverPath = path.join(backendDir, "server.py");
+        // support backend/venv or backend/.venv
+        const venvDir = fs.existsSync(path.join(backendDir, "venv"))
+            ? path.join(backendDir, "venv")
+            : path.join(backendDir, ".venv");
 
-    // helpful error if venv missing
-    if (!fs.existsSync(pythonPath)) {
-        console.error("[python] venv python not found at:", pythonPath);
-        console.error("[python] expected venv at:", venvDir);
-        return;
+        serverExec =
+            process.platform === "win32"
+                ? path.join(venvDir, "Scripts", "python.exe")
+                : fs.existsSync(path.join(venvDir, "bin", "python3"))
+                  ? path.join(venvDir, "bin", "python3")
+                  : path.join(venvDir, "bin", "python");
+
+        serverArgs = [path.join(backendDir, "server.py")];
+        serverCwd = backendDir;
+
+        if (!fs.existsSync(serverExec)) {
+            console.error("[python] venv python not found at:", serverExec);
+            console.error("[python] expected venv at:", venvDir);
+            return;
+        }
+        if (!fs.existsSync(serverArgs[0])) {
+            console.error("[python] server.py not found at:", serverArgs[0]);
+            return;
+        }
     }
-    if (!fs.existsSync(serverPath)) {
-        console.error("[python] server.py not found at:", serverPath);
-        return;
-    }
 
-    pyProcess = spawn(pythonPath, [serverPath], {
-        cwd: backendDir,
-    });
+    pyProcess = spawn(serverExec, serverArgs, { cwd: serverCwd });
 
     pyProcess.stdout.on("data", (data) =>
         console.log("[python]", data.toString().trim()),

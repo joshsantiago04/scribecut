@@ -2,6 +2,7 @@
     "name": "clip-findr",
     "version": "1.0.0",
     "description": "Search your video library by what was said",
+    "author": "HajoLabs",
     "main": "electron/main.js",
     "scripts": {
         "dev": "vite",
@@ -41,7 +42,7 @@
         "nsis": {
             "oneClick": false,
             "allowToChangeInstallationDirectory": true,
-            "installerFilename": "ClipFindr-Setup.exe"
+            "artifactName": "ClipFindr-Setup.exe"
         },
         "mac": {
             "target": [

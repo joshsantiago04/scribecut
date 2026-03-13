@@ -59,9 +59,11 @@ jobs:
         shell: bash
         run: |
           if [ "$RUNNER_OS" = "Windows" ]; then
-            CONFIG='{"bundle":{"resources":{"../backend/dist/server.exe":"backend/server.exe"}}}'
+            CONFIG='{"bundle":{"targets":["nsis","msi"],"resources":{"../backend/dist/server.exe":"backend/server.exe"}}}'
+          elif [ "$RUNNER_OS" = "macOS" ]; then
+            CONFIG='{"bundle":{"targets":["dmg"],"resources":{"../backend/dist/server":"backend/server"}}}'
           else
-            CONFIG='{"bundle":{"resources":{"../backend/dist/server":"backend/server"}}}'
+            CONFIG='{"bundle":{"targets":["deb","appimage"],"resources":{"../backend/dist/server":"backend/server"}}}'
           fi
           npm run tauri:build -- --config "$CONFIG"
 

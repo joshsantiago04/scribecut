@@ -65,7 +65,8 @@ videos/
 transcripts/
 cache/
 *.wav
-*.json
+transcripts/*.json
+cache/*.json
 
 # OS
 .DS_Store

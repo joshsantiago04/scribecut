@@ -126,6 +126,8 @@ class ExportRequest(BaseModel):
 
 @app.post("/export")
 def export_clips(req: ExportRequest):
+    import imageio_ffmpeg
+    ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
     os.makedirs(req.outputDir, exist_ok=True)
     exported = []
     for clip in req.clips:
@@ -133,7 +135,7 @@ def export_clips(req: ExportRequest):
         try:
             subprocess.run(
                 [
-                    "ffmpeg", "-y",
+                    ffmpeg, "-y",
                     "-i", clip.videoPath,
                     "-ss", str(clip.start),
                     "-to", str(clip.end),

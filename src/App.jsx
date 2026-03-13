@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import Titlebar from "./components/Titlebar";
 import Sidebar from "./components/Sidebar";
 import VideoPlayer from "./components/VideoPlayer";
@@ -22,6 +24,16 @@ export default function App() {
     const [exportQueue, setExportQueue] = useState([]);
 
     const videoRef = useRef(null);
+
+    // Show window and fade in after first render to avoid white flash
+    useEffect(() => {
+        const win = getCurrentWindow();
+        win.show().then(() => {
+            requestAnimationFrame(() => {
+                document.getElementById('root').style.opacity = '1';
+            });
+        });
+    }, []);
 
     const segments =
         activeVideo >= 0 ? (videos[activeVideo]?.segments ?? []) : [];
@@ -85,8 +97,7 @@ export default function App() {
     }, [searchQuery, segments]);
 
     const handleUpload = async () => {
-        if (!window.electronAPI) return;
-        const filePaths = await window.electronAPI.openFile();
+        const filePaths = await invoke("open_file_dialog");
         if (!filePaths) return;
 
         setVideos((prev) => {
@@ -96,7 +107,7 @@ export default function App() {
                 .map((fp) => ({
                     name: fp.split(/[\\/]/).pop(),
                     path: fp,
-                    url: "file://" + fp.replace(/\\/g, "/"),
+                    url: `${API}/stream?path=${encodeURIComponent(fp)}`,
                     status: "pending",
                     segments: [],
                 }));
@@ -189,8 +200,7 @@ export default function App() {
     };
 
     const handleSelectOutputDir = async () => {
-        if (!window.electronAPI) return;
-        const dir = await window.electronAPI.openDirectory?.();
+        const dir = await invoke("open_directory_dialog");
         if (dir) setOutputDir(dir);
     };
 
@@ -243,9 +253,20 @@ export default function App() {
     };
 
     const handleTimestampClick = (start) => {
-        if (videoRef.current) {
-            videoRef.current.currentTime = start;
-            videoRef.current.play();
+        const video = videoRef.current;
+        if (!video) return;
+
+        const seek = () => {
+            video.currentTime = start;
+            video.play();
+        };
+
+        // With preload="none" the video may not have loaded yet — trigger load first
+        if (video.readyState >= 1) {
+            seek();
+        } else {
+            video.load();
+            video.addEventListener("loadedmetadata", seek, { once: true });
         }
     };
 

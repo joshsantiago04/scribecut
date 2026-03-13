@@ -5,7 +5,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ src }, ref) {
     <div className="main">
       <div className="video-container">
         {src ? (
-          <video ref={ref} controls src={src} />
+          <video ref={ref} controls src={src} preload="none" controlsList="nofullscreen" />
         ) : (
           <div className="video-placeholder">
             <div className="upload-icon">&#9654;</div>

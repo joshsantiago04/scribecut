@@ -8,8 +8,9 @@
 html, body {
   height: 100vh;
   overflow: hidden;
-  background: #1e1e1e;
+  background: transparent;
   color: #cccccc;
+  border-radius: 10px;
 }
 
 #root {
@@ -23,6 +24,11 @@ html, body {
     "sidebar  bottom  right";
   overflow: hidden;
   user-select: none;
+  background: #1e1e1e;
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+  opacity: 0;
+  transition: opacity 0.15s ease;
 }
 
 /* ── Titlebar ── */
@@ -226,6 +232,7 @@ html, body {
   object-fit: contain;
   background: #111;
 }
+
 
 .video-placeholder {
   width: 100%;

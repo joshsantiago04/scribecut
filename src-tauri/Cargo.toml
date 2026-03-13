@@ -1,0 +1,19 @@
+[package]
+name = "clip-findr"
+version = "1.0.0"
+edition = "2021"
+
+[lib]
+name = "clip_findr_lib"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["protocol-asset"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rfd = "0.15"
+base64 = "0.22"
+tokio = { version = "1", features = ["process"] }

@@ -44,17 +44,14 @@ export default function BottomPanel({
                 {activeTab === 0 &&
                     (audioClips.length > 0 ? (
                         audioClips.map((ts, i) => (
-                            <div key={i} className="timestamp-item">
-                                <span
-                                    className="timestamp-time"
-                                    onClick={() => onTimestampClick(ts.start)}
-                                >
+                            <div key={i} className="timestamp-item" onClick={() => onTimestampClick(ts.start)} style={{ cursor: "pointer" }}>
+                                <span className="timestamp-time">
                                     [{formatTime(ts.start)} – {formatTime(ts.end)}]
                                 </span>
                                 <button
                                     className="add-to-export-btn"
                                     title="Add to export queue"
-                                    onClick={() => onAddToExport({ start: ts.start, end: ts.end })}
+                                    onClick={(e) => { e.stopPropagation(); onAddToExport({ start: ts.start, end: ts.end }); }}
                                 >
                                     +
                                 </button>
@@ -73,22 +70,13 @@ export default function BottomPanel({
                         <div style={{ lineHeight: "1.6" }}>
                             {(transcriptMatches.length > 0 ? transcriptMatches : segments).map(
                                 (s, i) => (
-                                    <div key={i} className="timestamp-item">
-                                        <span
-                                            className="timestamp-text"
-                                            onClick={() => onTimestampClick(s.start)}
-                                        >
-                                            {s.text}
-                                        </span>
-                                        <span className="timestamp-time">
-                                            ({formatTime(s.start)})
-                                        </span>
+                                    <div key={i} className="timestamp-item" onClick={() => onTimestampClick(s.start)} style={{ cursor: "pointer" }}>
+                                        <span className="timestamp-text">{s.text}</span>
+                                        <span className="timestamp-time">({formatTime(s.start)})</span>
                                         <button
                                             className="add-to-export-btn"
                                             title="Add to export queue"
-                                            onClick={() =>
-                                                onAddToExport({ start: s.start, end: s.end })
-                                            }
+                                            onClick={(e) => { e.stopPropagation(); onAddToExport({ start: s.start, end: s.end }); }}
                                         >
                                             +
                                         </button>

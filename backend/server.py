@@ -1,23 +1,49 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import uvicorn
 import subprocess
 import os
 
-import transcribe as transcribe_module
-import search as search_module
-import peaks as peaks_module
-
 app = FastAPI()
 
-# Allow Electron renderer (localhost) to call this API
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["POST"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
+    expose_headers=["Content-Range", "Accept-Ranges", "Content-Length"],
 )
+
+# ── Lazy module cache ─────────────────────────────────────────────────────────
+# faster-whisper, librosa, scipy are heavy — only import them on first use
+# so the server starts up fast and the window appears immediately.
+
+_transcribe = None
+_search = None
+_peaks = None
+
+def get_transcribe():
+    global _transcribe
+    if _transcribe is None:
+        import transcribe as m
+        _transcribe = m
+    return _transcribe
+
+def get_search():
+    global _search
+    if _search is None:
+        import search as m
+        _search = m
+    return _search
+
+def get_peaks():
+    global _peaks
+    if _peaks is None:
+        import peaks as m
+        _peaks = m
+    return _peaks
 
 
 # ── Request / Response models ─────────────────────────────────────────────────
@@ -39,11 +65,18 @@ class SearchRequest(BaseModel):
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
+@app.get("/stream")
+def stream_video(path: str):
+    """Serve a local video file. FileResponse handles Range requests natively."""
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(path)
+
+
 @app.post("/transcribe")
 def transcribe(req: TranscribeRequest):
-    """Accept a video file path, return transcript segments with timestamps."""
     try:
-        segments = transcribe_module.transcribe(req.path)
+        segments = get_transcribe().transcribe(req.path)
         return {"segments": segments}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -51,10 +84,8 @@ def transcribe(req: TranscribeRequest):
 
 @app.post("/search")
 def search(req: SearchRequest):
-    """Fuzzy search a keyword over transcript segments.
-    Returns only { start, end } for matching segments."""
     seg_dicts = [s.model_dump() for s in req.segments]
-    results = search_module.find_matches(req.query, seg_dicts)
+    results = get_search().find_matches(req.query, seg_dicts)
     return {"results": results}
 
 
@@ -68,9 +99,8 @@ class PeaksRequest(BaseModel):
 
 @app.post("/peaks")
 def peaks(req: PeaksRequest):
-    """Detect loud audio peaks and return clip candidates."""
     try:
-        clips = peaks_module.detect_clips(
+        clips = get_peaks().detect_clips(
             video_path=req.path,
             pre_pad=req.pre_pad,
             post_pad=req.post_pad,
@@ -96,7 +126,6 @@ class ExportRequest(BaseModel):
 
 @app.post("/export")
 def export_clips(req: ExportRequest):
-    """Trim and save each clip using ffmpeg."""
     os.makedirs(req.outputDir, exist_ok=True)
     exported = []
     for clip in req.clips:

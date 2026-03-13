@@ -59,9 +59,9 @@ jobs:
         shell: bash
         run: |
           if [ "$RUNNER_OS" = "Windows" ]; then
-            CONFIG='{"bundle":{"resources":{"backend/dist/server.exe":"backend/server.exe"}}}'
+            CONFIG='{"bundle":{"resources":{"../backend/dist/server.exe":"backend/server.exe"}}}'
           else
-            CONFIG='{"bundle":{"resources":{"backend/dist/server":"backend/server"}}}'
+            CONFIG='{"bundle":{"resources":{"../backend/dist/server":"backend/server"}}}'
           fi
           npm run tauri:build -- --config "$CONFIG"
 

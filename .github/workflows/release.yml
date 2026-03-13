@@ -35,17 +35,6 @@ jobs:
           pip install -r requirements.txt
           pyinstaller server.spec
 
-      # ── Write platform-specific Tauri resource config ───────────────────────
-      - name: Write Tauri resource config
-        shell: python
-        run: |
-          import json, os
-          is_win = os.environ.get("RUNNER_OS") == "Windows"
-          src = "backend/dist/server.exe" if is_win else "backend/dist/server"
-          dst = "backend/server.exe" if is_win else "backend/server"
-          with open("src-tauri/tauri.resources.json", "w") as f:
-              json.dump({"bundle": {"resources": {src: dst}}}, f)
-
       # ── Node + Rust ─────────────────────────────────────────────────────────
       - uses: actions/setup-node@v4
         with:
@@ -67,7 +56,14 @@ jobs:
 
       # ── Build ───────────────────────────────────────────────────────────────
       - name: Build Tauri app
-        run: npm run tauri:build -- --config src-tauri/tauri.resources.json
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            CONFIG='{"bundle":{"resources":{"backend/dist/server.exe":"backend/server.exe"}}}'
+          else
+            CONFIG='{"bundle":{"resources":{"backend/dist/server":"backend/server"}}}'
+          fi
+          npm run tauri:build -- --config "$CONFIG"
 
       # ── Upload to GitHub release ────────────────────────────────────────────
       - name: Upload to release

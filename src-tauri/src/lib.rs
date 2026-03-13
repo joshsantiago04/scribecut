@@ -68,10 +68,15 @@ fn start_dev_server(backend_dir: &PathBuf) -> Option<Child> {
         server_py.display()
     );
 
-    Command::new(&python)
-        .arg(&server_py)
-        .current_dir(backend_dir)
-        .spawn()
+    #[allow(unused_mut)]
+    let mut cmd = Command::new(&python);
+    cmd.arg(&server_py).current_dir(backend_dir);
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+    cmd.spawn()
         .map_err(|e| eprintln!("[python] failed to spawn: {e}"))
         .ok()
 }
@@ -92,9 +97,15 @@ fn start_prod_server(backend_dir: &PathBuf) -> Option<Child> {
         return None;
     }
 
-    Command::new(&server_exec)
-        .current_dir(backend_dir)
-        .spawn()
+    #[allow(unused_mut)]
+    let mut cmd = Command::new(&server_exec);
+    cmd.current_dir(backend_dir);
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+    cmd.spawn()
         .map_err(|e| eprintln!("[python] failed to spawn: {e}"))
         .ok()
 }

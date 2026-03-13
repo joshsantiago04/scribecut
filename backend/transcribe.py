@@ -1,6 +1,7 @@
 import subprocess
 import tempfile
 import os
+import imageio_ffmpeg
 from faster_whisper import WhisperModel
 
 # Lazy-loaded so the server starts immediately; model loads on first transcription
@@ -19,9 +20,10 @@ def extract_audio(video_path: str) -> str:
     tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
     tmp.close()
 
+    ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
     subprocess.run(
         [
-            "ffmpeg", "-y",
+            ffmpeg, "-y",
             "-i", video_path,
             "-ac", "1",       # mono
             "-ar", "16000",   # 16kHz sample rate (what whisper expects)

@@ -9,7 +9,7 @@ binaries = []
 hiddenimports = []
 
 # Collect native packages that PyInstaller misses on its own
-for pkg in ["faster_whisper", "ctranslate2", "huggingface_hub", "librosa", "soundfile", "audioread"]:
+for pkg in ["faster_whisper", "ctranslate2", "huggingface_hub", "librosa", "soundfile", "audioread", "imageio_ffmpeg"]:
     d, b, h = collect_all(pkg)
     datas += d
     binaries += b

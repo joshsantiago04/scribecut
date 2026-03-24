@@ -136,10 +136,11 @@ def export_clips(req: ExportRequest):
             subprocess.run(
                 [
                     ffmpeg, "-y",
-                    "-i", clip.videoPath,
                     "-ss", str(clip.start),
-                    "-to", str(clip.end),
-                    "-c", "copy",
+                    "-i", clip.videoPath,
+                    "-t", str(clip.end - clip.start),
+                    "-c:v", "copy",
+                    "-c:a", "aac",
                     out_path,
                 ],
                 check=True,

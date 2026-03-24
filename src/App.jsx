@@ -270,6 +270,31 @@ export default function App() {
         }
     };
 
+    const [bottomHeight, setBottomHeight] = useState(242);
+
+    const handleResizerMouseDown = (e) => {
+        e.preventDefault();
+        const startY = e.clientY;
+        const startHeight = bottomHeight;
+
+        const onMove = (e) => {
+            const delta = startY - e.clientY;
+            const clamped = Math.max(120, Math.min(600, startHeight + delta));
+            setBottomHeight(clamped);
+            document.documentElement.style.setProperty('--bottom-height', clamped + 'px');
+        };
+        const onUp = () => {
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+        };
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+    };
+
+    useEffect(() => {
+        document.documentElement.style.setProperty('--bottom-height', bottomHeight + 'px');
+    }, []);
+
     const videoSrc = activeVideo >= 0 ? videos[activeVideo]?.url : null;
 
     return (
@@ -284,6 +309,7 @@ export default function App() {
                 onDetectPeaks={handleDetectPeaks} // ✅ NEW prop
             />
             <VideoPlayer ref={videoRef} src={videoSrc} />
+            <div className="bottom-resizer" onMouseDown={handleResizerMouseDown} />
             <SearchPanel
                 query={searchQuery}
                 onQueryChange={setSearchQuery}

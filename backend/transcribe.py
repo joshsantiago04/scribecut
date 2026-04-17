@@ -1,10 +1,21 @@
 import subprocess
 import tempfile
 import os
+import sys
 import glob
 import site
-import imageio_ffmpeg
 from faster_whisper import WhisperModel
+
+
+def _get_ffmpeg_exe():
+    if getattr(sys, 'frozen', False):
+        binaries_dir = os.path.join(sys._MEIPASS, 'imageio_ffmpeg', 'binaries')
+        if os.path.isdir(binaries_dir):
+            for fname in os.listdir(binaries_dir):
+                if 'ffmpeg' in fname.lower():
+                    return os.path.join(binaries_dir, fname)
+    import imageio_ffmpeg
+    return imageio_ffmpeg.get_ffmpeg_exe()
 
 # Add pip-installed NVIDIA CUDA libs to LD_LIBRARY_PATH so ctranslate2 can
 # find libcublas.so.12 etc. at runtime (they are loaded lazily via dlopen).
@@ -56,7 +67,7 @@ def extract_audio(video_path: str) -> str:
     tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
     tmp.close()
 
-    ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+    ffmpeg = _get_ffmpeg_exe()
     subprocess.run(
         [
             ffmpeg, "-y",

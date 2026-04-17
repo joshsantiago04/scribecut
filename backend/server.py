@@ -162,6 +162,8 @@ async def waveform(req: WaveformRequest):
         peaks = await loop.run_in_executor(None, compute)
         return {"peaks": peaks}
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 

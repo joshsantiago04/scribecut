@@ -136,7 +136,9 @@ export default function App() {
                 .map((fp) => ({
                     name: fp.split(/[\\/]/).pop(),
                     path: fp,
-                    url: convertFileSrc(fp),
+                    url: import.meta.env.DEV
+                        ? `${API}/stream?path=${encodeURIComponent(fp)}`
+                        : convertFileSrc(fp),
                     status: "pending",
                     segments: [],
                 }));

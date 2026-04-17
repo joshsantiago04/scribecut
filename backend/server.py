@@ -72,6 +72,14 @@ class SearchRequest(BaseModel):
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
+@app.get("/stream")
+def stream_video(path: str):
+    from fastapi.responses import FileResponse
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(path)
+
+
 @app.get("/capabilities")
 def capabilities():
     has_cuda = get_transcribe().check_cuda()

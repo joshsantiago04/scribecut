@@ -6,6 +6,16 @@ import uvicorn
 import subprocess
 import sys
 import os
+import logging
+import tempfile
+
+log_path = os.path.join(tempfile.gettempdir(), "scribecut_server.log")
+logging.basicConfig(
+    filename=log_path,
+    level=logging.DEBUG,
+    format="%(asctime)s %(levelname)s %(message)s",
+)
+logging.info(f"Server starting. frozen={getattr(sys, 'frozen', False)}, log={log_path}")
 
 
 def get_ffmpeg_exe():
@@ -99,6 +109,8 @@ async def transcribe(req: TranscribeRequest):
             for event in get_transcribe().transcribe_stream(req.path, model_name=req.model, device=device):
                 loop.call_soon_threadsafe(queue.put_nowait, event)
         except Exception as e:
+            import traceback
+            logging.error(f"Transcribe error: {traceback.format_exc()}")
             loop.call_soon_threadsafe(queue.put_nowait, {"type": "error", "detail": str(e)})
         finally:
             loop.call_soon_threadsafe(queue.put_nowait, {"type": "done"})
@@ -171,7 +183,7 @@ async def waveform(req: WaveformRequest):
         return {"peaks": peaks}
     except Exception as e:
         import traceback
-        traceback.print_exc()
+        logging.error(f"Waveform error: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

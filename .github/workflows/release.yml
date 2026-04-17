@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  release-windows:
     runs-on: windows-latest
 
     steps:
@@ -49,3 +49,43 @@ jobs:
           files: |
             src-tauri/target/release/bundle/**/*.exe
             src-tauri/target/release/bundle/**/*.msi
+
+  release-mac:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Python backend ──────────────────────────────────────────────────────
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python deps & bundle backend
+        working-directory: backend
+        run: |
+          pip install pyinstaller
+          pip install -r requirements.txt
+          pyinstaller server.spec
+
+      # ── Node + Rust ─────────────────────────────────────────────────────────
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - run: npm install
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # ── Build ───────────────────────────────────────────────────────────────
+      - name: Build Tauri app
+        run: npm run tauri:build -- --config '{"bundle":{"targets":["dmg"],"resources":{"../backend/dist/server":"backend/server"}}}'
+
+      # ── Upload to GitHub release ────────────────────────────────────────────
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          name: "ScribeCut ${{ github.ref_name }}"
+          files: |
+            src-tauri/target/release/bundle/**/*.dmg

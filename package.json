@@ -1,5 +1,5 @@
 {
-    "name": "clip-findr",
+    "name": "scribecut",
     "version": "1.0.0",
     "description": "Search your video library by what was said",
     "author": "HajoLabs",
@@ -13,7 +13,8 @@
     "dependencies": {
         "@tauri-apps/api": "^2.10.1",
         "react": "^18.3.1",
-        "react-dom": "^18.3.1"
+        "react-dom": "^18.3.1",
+        "wavesurfer.js": "^7.12.5"
     },
     "devDependencies": {
         "@tauri-apps/cli": "^2.10.1",

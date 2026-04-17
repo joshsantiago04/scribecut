@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 import uvicorn
 import subprocess
@@ -22,7 +22,6 @@ app.add_middleware(
 
 _transcribe = None
 _search = None
-_peaks = None
 
 def get_transcribe():
     global _transcribe
@@ -38,18 +37,13 @@ def get_search():
         _search = m
     return _search
 
-def get_peaks():
-    global _peaks
-    if _peaks is None:
-        import peaks as m
-        _peaks = m
-    return _peaks
-
 
 # ── Request / Response models ─────────────────────────────────────────────────
 
 class TranscribeRequest(BaseModel):
     path: str
+    model: str = "small"
+    use_gpu: bool = False
 
 
 class Segment(BaseModel):
@@ -73,13 +67,43 @@ def stream_video(path: str):
     return FileResponse(path)
 
 
+@app.get("/capabilities")
+def capabilities():
+    has_cuda = get_transcribe().check_cuda()
+    return {"cuda": has_cuda}
+
+
 @app.post("/transcribe")
-def transcribe(req: TranscribeRequest):
-    try:
-        segments = get_transcribe().transcribe(req.path)
-        return {"segments": segments}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+async def transcribe(req: TranscribeRequest):
+    import asyncio, threading, json
+
+    device = "cuda" if req.use_gpu else "cpu"
+    queue: asyncio.Queue = asyncio.Queue()
+    loop = asyncio.get_event_loop()
+
+    def run():
+        try:
+            for event in get_transcribe().transcribe_stream(req.path, model_name=req.model, device=device):
+                loop.call_soon_threadsafe(queue.put_nowait, event)
+        except Exception as e:
+            loop.call_soon_threadsafe(queue.put_nowait, {"type": "error", "detail": str(e)})
+        finally:
+            loop.call_soon_threadsafe(queue.put_nowait, {"type": "done"})
+
+    threading.Thread(target=run, daemon=True).start()
+
+    async def stream():
+        while True:
+            event = await queue.get()
+            yield f"data: {json.dumps(event)}\n\n"
+            if event["type"] in ("done", "error"):
+                break
+
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.post("/search")
@@ -89,25 +113,49 @@ def search(req: SearchRequest):
     return {"results": results}
 
 
-class PeaksRequest(BaseModel):
+
+class WaveformRequest(BaseModel):
     path: str
-    pre_pad: float = 20.0
-    post_pad: float = 10.0
-    min_prominence_db: float = 8.0
-    min_gap_s: float = 30.0
+    samples: int = 1000
 
 
-@app.post("/peaks")
-def peaks(req: PeaksRequest):
-    try:
-        clips = get_peaks().detect_clips(
-            video_path=req.path,
-            pre_pad=req.pre_pad,
-            post_pad=req.post_pad,
-            min_prominence_db=req.min_prominence_db,
-            min_gap_s=req.min_gap_s,
+@app.post("/waveform")
+async def waveform(req: WaveformRequest):
+    import asyncio
+    import numpy as np
+    import imageio_ffmpeg
+
+    def compute():
+        ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+        # 100 Hz mono is enough for waveform display and keeps data tiny
+        # (a 1-hour video = ~360KB vs ~317MB at 22050Hz)
+        result = subprocess.run(
+            [
+                ffmpeg, "-y",
+                "-i", req.path,
+                "-ac", "1",
+                "-ar", "100",
+                "-vn",
+                "-f", "f32le",
+                "pipe:1",
+            ],
+            capture_output=True,
+            check=True,
         )
-        return {"clips": clips}
+        samples = np.frombuffer(result.stdout, dtype=np.float32)
+        if len(samples) == 0:
+            return []
+        chunk = max(1, len(samples) // req.samples)
+        peaks = [
+            float(np.max(np.abs(samples[i * chunk:(i + 1) * chunk])))
+            for i in range(min(req.samples, len(samples) // chunk))
+        ]
+        return peaks
+
+    try:
+        loop = asyncio.get_event_loop()
+        peaks = await loop.run_in_executor(None, compute)
+        return {"peaks": peaks}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

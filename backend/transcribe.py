@@ -1,17 +1,53 @@
 import subprocess
 import tempfile
 import os
+import glob
+import site
 import imageio_ffmpeg
 from faster_whisper import WhisperModel
 
+# Add pip-installed NVIDIA CUDA libs to LD_LIBRARY_PATH so ctranslate2 can
+# find libcublas.so.12 etc. at runtime (they are loaded lazily via dlopen).
+def _setup_cuda_libs():
+    paths = []
+    for sp in site.getsitepackages():
+        paths += glob.glob(os.path.join(sp, "nvidia", "*", "lib"))
+    if paths:
+        existing = os.environ.get("LD_LIBRARY_PATH", "")
+        os.environ["LD_LIBRARY_PATH"] = ":".join(filter(None, paths + [existing]))
+
+_setup_cuda_libs()
+
 # Lazy-loaded so the server starts immediately; model loads on first transcription
 _model = None
+_model_cfg = None  # (model_name, device)
 
-def _get_model():
-    global _model
-    if _model is None:
-        _model = WhisperModel("small", device="cpu", compute_type="int8")
+def _get_model(model_name: str = "small", device: str = "cpu"):
+    global _model, _model_cfg
+    cfg = (model_name, device)
+    if _model is None or _model_cfg != cfg:
+        compute_type = "float16" if device == "cuda" else "int8"
+        _model = WhisperModel(model_name, device=device, compute_type=compute_type)
+        _model_cfg = cfg
     return _model
+
+
+def check_cuda() -> bool:
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["nvidia-smi"],
+            capture_output=True,
+            timeout=5,
+        )
+        if result.returncode != 0:
+            return False
+        # Also verify ctranslate2 has CUDA support compiled in
+        import ctranslate2
+        types = ctranslate2.get_supported_compute_types("cuda")
+        return bool(types)
+    except Exception:
+        return False
 
 
 def extract_audio(video_path: str) -> str:
@@ -37,22 +73,21 @@ def extract_audio(video_path: str) -> str:
     return tmp.name
 
 
-def transcribe(video_path: str) -> list[dict]:
-    """Extract audio from video and transcribe it.
-    Returns a list of segments: [{ start, end, text }, ...]"""
-    wav_path = None
+def transcribe_stream(video_path: str, model_name: str = "small", device: str = "cpu"):
+    """Yields {'type': 'info', 'duration': float} first, then
+    {'type': 'segment', 'start', 'end', 'text'} for each segment.
+    Caller is responsible for running this in a thread."""
+    wav_path = extract_audio(video_path)
     try:
-        wav_path = extract_audio(video_path)
-        segments, _ = _get_model().transcribe(
+        segments, info = _get_model(model_name, device).transcribe(
             wav_path,
             beam_size=5,
             condition_on_previous_text=False,
             vad_filter=True,
         )
-        return [
-            {"start": seg.start, "end": seg.end, "text": seg.text.strip()}
-            for seg in segments
-        ]
+        yield {"type": "info", "duration": info.duration}
+        for seg in segments:
+            yield {"type": "segment", "start": seg.start, "end": seg.end, "text": seg.text.strip()}
     finally:
-        if wav_path and os.path.exists(wav_path):
+        if os.path.exists(wav_path):
             os.remove(wav_path)

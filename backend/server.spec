@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-# PyInstaller spec for Clip Findr backend server
+# PyInstaller spec for ScribeCut backend server
 # Bundles the Python FastAPI server + all ML dependencies into a single executable.
 
 from PyInstaller.utils.hooks import collect_all, collect_submodules

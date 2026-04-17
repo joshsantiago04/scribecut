@@ -1,10 +1,10 @@
 [package]
-name = "clip-findr"
-version = "1.0.0"
+name = "scribecut"
+version = "1.0.1"
 edition = "2021"
 
 [lib]
-name = "clip_findr_lib"
+name = "scribecut_lib"
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [build-dependencies]
@@ -17,3 +17,4 @@ serde_json = "1"
 rfd = "0.15"
 base64 = "0.22"
 tokio = { version = "1", features = ["process"] }
+glob = "0.3"

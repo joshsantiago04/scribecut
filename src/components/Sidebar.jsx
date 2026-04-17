@@ -4,7 +4,12 @@ export default function Sidebar({
     onSelectVideo,
     onUpload,
     onTranscribe,
-    onDetectPeaks, // NEW
+    transcribeProgress,
+    transcribeModel,
+    onModelChange,
+    useGpu,
+    onGpuChange,
+    cudaAvailable,
 }) {
     const active = activeVideo >= 0 ? videos[activeVideo] : null;
 
@@ -49,15 +54,51 @@ export default function Sidebar({
                               ? "✓ Transcribed"
                               : "Transcribe"}
                     </button>
+                    {transcribeProgress !== null && (
+                        <div className="transcribe-progress">
+                            <div
+                                className="transcribe-progress-fill"
+                                style={{ width: `${transcribeProgress}%` }}
+                            />
+                            <span className="transcribe-progress-label">
+                                {transcribeProgress < 100 ? `${transcribeProgress}%` : "Done"}
+                            </span>
+                        </div>
+                    )}
 
-                    <button
-                        className="transcribe-btn"
-                        onClick={() => onDetectPeaks?.(activeVideo)}
-                    >
-                        Detect Peaks
-                    </button>
                 </>
             )}
+
+            <div className="sidebar-settings">
+                <div className="video-list-label">Transcribe Settings</div>
+                <div className="setting-row">
+                    <label className="setting-label">Model</label>
+                    <select
+                        className="setting-select"
+                        value={transcribeModel}
+                        onChange={(e) => onModelChange(e.target.value)}
+                        size="1"
+                    >
+                        <option value="small">Small (fast)</option>
+                        <option value="medium">Medium (balanced)</option>
+                        <option value="large-v3">Large (best)</option>
+                    </select>
+                </div>
+                <div className="setting-row">
+                    <label className={`setting-label ${!cudaAvailable ? "setting-label--dim" : ""}`}>
+                        GPU {!cudaAvailable && <span className="setting-na">(N/A)</span>}
+                    </label>
+                    <label className="toggle">
+                        <input
+                            type="checkbox"
+                            checked={useGpu}
+                            disabled={!cudaAvailable}
+                            onChange={(e) => onGpuChange(e.target.checked)}
+                        />
+                        <span className="toggle-slider" />
+                    </label>
+                </div>
+            </div>
         </div>
     );
 }

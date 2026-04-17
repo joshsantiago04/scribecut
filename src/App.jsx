@@ -22,6 +22,11 @@ export default function App() {
     const [timestamps, setTimestamps] = useState([]);
     const [outputDir, setOutputDir] = useState("");
     const [exportQueue, setExportQueue] = useState([]);
+    const [waveformPeaks, setWaveformPeaks] = useState(null);
+    const [transcribeModel, setTranscribeModel] = useState("small");
+    const [useGpu, setUseGpu] = useState(false);
+    const [cudaAvailable, setCudaAvailable] = useState(false);
+    const [transcribeProgress, setTranscribeProgress] = useState(null); // 0-100 or null
 
     const videoRef = useRef(null);
 
@@ -35,8 +40,32 @@ export default function App() {
         });
     }, []);
 
+    // Check GPU availability once on startup
+    useEffect(() => {
+        fetch(`${API}/capabilities`)
+            .then((r) => r.json())
+            .then((data) => setCudaAvailable(data.cuda))
+            .catch(() => {});
+    }, []);
+
     const segments =
         activeVideo >= 0 ? (videos[activeVideo]?.segments ?? []) : [];
+
+    // Fetch waveform peaks when active video changes
+    useEffect(() => {
+        if (activeVideo < 0) return;
+        const video = videos[activeVideo];
+        if (!video) return;
+        setWaveformPeaks(null);
+        fetch(`${API}/waveform`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ path: video.path }),
+        })
+            .then((r) => r.json())
+            .then((data) => setWaveformPeaks(data.peaks ?? null))
+            .catch(() => {});
+    }, [activeVideo]);
 
     // Update message when switching active video
     useEffect(() => {
@@ -126,78 +155,63 @@ export default function App() {
                 i === index ? { ...v, status: "transcribing" } : v,
             ),
         );
-        setMessages([
-            { type: "system", text: `Transcribing ${video.name}...` },
-        ]);
+        setMessages([{ type: "system", text: `Transcribing ${video.name}...` }]);
+        setTranscribeProgress(0);
 
         try {
             const r = await fetch(`${API}/transcribe`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ path: video.path }),
+                body: JSON.stringify({ path: video.path, model: transcribeModel, use_gpu: useGpu }),
             });
-            const data = await r.json();
+            if (!r.ok) {
+                const err = await r.json().catch(() => ({}));
+                throw new Error(err.detail || `HTTP ${r.status}`);
+            }
+
+            const reader = r.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = "";
+            let duration = null;
+            const collected = [];
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split("\n");
+                buffer = lines.pop();
+                for (const line of lines) {
+                    if (!line.startsWith("data: ")) continue;
+                    const event = JSON.parse(line.slice(6));
+                    if (event.type === "info") {
+                        duration = event.duration;
+                    } else if (event.type === "segment") {
+                        collected.push({ start: event.start, end: event.end, text: event.text });
+                        if (duration) {
+                            setTranscribeProgress(Math.min(99, Math.round((event.end / duration) * 100)));
+                        }
+                    } else if (event.type === "error") {
+                        throw new Error(event.detail);
+                    }
+                }
+            }
+
             setVideos((prev) =>
-                prev.map((v, i) =>
-                    i === index
-                        ? { ...v, status: "done", segments: data.segments }
-                        : v,
-                ),
+                prev.map((v, i) => i === index ? { ...v, status: "done", segments: collected } : v)
             );
-            setMessages([
-                {
-                    type: "system",
-                    text: "Transcription complete. Type to search.",
-                },
-            ]);
+            setTranscribeProgress(100);
+            setTimeout(() => setTranscribeProgress(null), 800);
+            setMessages([{ type: "system", text: "Transcription complete. Type to search." }]);
         } catch (err) {
             setVideos((prev) =>
-                prev.map((v, i) =>
-                    i === index ? { ...v, status: "pending" } : v,
-                ),
+                prev.map((v, i) => i === index ? { ...v, status: "pending" } : v)
             );
-            setMessages([
-                {
-                    type: "system",
-                    text: `Transcription failed: ${err.message}`,
-                },
-            ]);
+            setTranscribeProgress(null);
+            setMessages([{ type: "system", text: `Transcription failed: ${err.message}` }]);
         }
     };
 
-    // ✅ NEW: peaks detection
-    const handleDetectPeaks = async (index) => {
-        const video = videos[index];
-        if (!video) return;
-
-        setMessages([
-            { type: "system", text: `Detecting peaks for ${video.name}...` },
-        ]);
-
-        try {
-            const r = await fetch(`${API}/peaks`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ path: video.path }),
-            });
-            const data = await r.json();
-            const clips = data.clips ?? [];
-            setTimestamps(clips);
-            setMessages([
-                {
-                    type: "system",
-                    text: `Found ${clips.length} peak clip${clips.length !== 1 ? "s" : ""}.`,
-                },
-            ]);
-        } catch (err) {
-            setMessages([
-                {
-                    type: "system",
-                    text: `Peak detection failed: ${err.message}`,
-                },
-            ]);
-        }
-    };
 
     const handleSelectOutputDir = async () => {
         const dir = await invoke("open_directory_dialog");
@@ -207,16 +221,22 @@ export default function App() {
     const handleAddToExport = ({ start, end }) => {
         const video = videos[activeVideo];
         if (!video) return;
-        setExportQueue((prev) => [
-            ...prev,
-            {
-                id: `${Date.now()}-${Math.random()}`,
-                videoPath: video.path,
-                videoName: video.name,
-                start,
-                end,
-            },
-        ]);
+        const baseName = video.name.replace(/\.[^/.]+$/, "");
+        setExportQueue((prev) => {
+            const count = prev.filter((c) => c.videoPath === video.path).length + 1;
+            const clipName = `${baseName}-${String(count).padStart(3, "0")}`;
+            return [
+                ...prev,
+                {
+                    id: `${Date.now()}-${Math.random()}`,
+                    videoPath: video.path,
+                    videoName: video.name,
+                    clipName,
+                    start,
+                    end,
+                },
+            ];
+        });
     };
 
     const handleUpdateClip = (id, field, value) => {
@@ -232,11 +252,11 @@ export default function App() {
     const handleExport = async () => {
         if (!outputDir || exportQueue.length === 0) return;
         setMessages([{ type: "system", text: `Exporting ${exportQueue.length} clip(s)...` }]);
-        const clips = exportQueue.map((clip, i) => ({
+        const clips = exportQueue.map((clip) => ({
             videoPath: clip.videoPath,
             start: clip.start,
             end: clip.end,
-            filename: `${clip.videoName.replace(/\.[^/.]+$/, "")}_clip_${i + 1}.mp4`,
+            filename: `${clip.clipName}.mp4`,
         }));
         try {
             const r = await fetch(`${API}/export`, {
@@ -306,9 +326,14 @@ export default function App() {
                 onSelectVideo={setActiveVideo}
                 onUpload={handleUpload}
                 onTranscribe={handleTranscribe}
-                onDetectPeaks={handleDetectPeaks} // ✅ NEW prop
+                transcribeProgress={transcribeProgress}
+                transcribeModel={transcribeModel}
+                onModelChange={setTranscribeModel}
+                useGpu={useGpu}
+                onGpuChange={setUseGpu}
+                cudaAvailable={cudaAvailable}
             />
-            <VideoPlayer ref={videoRef} src={videoSrc} />
+            <VideoPlayer ref={videoRef} src={videoSrc} peaks={waveformPeaks} />
             <div className="bottom-resizer" onMouseDown={handleResizerMouseDown} />
             <SearchPanel
                 query={searchQuery}

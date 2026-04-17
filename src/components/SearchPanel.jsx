@@ -69,9 +69,12 @@ export default function SearchPanel({
                         exportQueue.map((clip) => (
                             <div key={clip.id} className="export-clip-item">
                                 <div className="export-clip-header">
-                                    <span className="export-clip-name" title={clip.videoName}>
-                                        {clip.videoName}
-                                    </span>
+                                    <input
+                                        className="clip-name-input"
+                                        defaultValue={clip.clipName}
+                                        onBlur={(e) => onUpdateClip(clip.id, "clipName", e.target.value)}
+                                        title="Rename clip"
+                                    />
                                     <button
                                         className="clip-remove-btn"
                                         onClick={() => onRemoveClip(clip.id)}

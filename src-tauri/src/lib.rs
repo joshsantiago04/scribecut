@@ -53,6 +53,26 @@ fn find_venv_python(backend_dir: &PathBuf) -> Option<PathBuf> {
     }
 }
 
+fn cuda_lib_path(backend_dir: &PathBuf) -> String {
+    // Collect all nvidia/*/lib dirs from the venv site-packages
+    let site_packages = backend_dir
+        .join("venv")
+        .join("lib")
+        .join("python3.12")
+        .join("site-packages");
+    let pattern = site_packages.join("nvidia").join("*").join("lib");
+    let mut paths: Vec<String> = glob::glob(pattern.to_str().unwrap_or(""))
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|p| p.to_string_lossy().to_string())
+        .collect();
+    if let Ok(existing) = std::env::var("LD_LIBRARY_PATH") {
+        paths.push(existing);
+    }
+    paths.join(":")
+}
+
 fn start_dev_server(backend_dir: &PathBuf) -> Option<Child> {
     let python = find_venv_python(backend_dir)?;
     let server_py = backend_dir.join("server.py");
@@ -71,6 +91,7 @@ fn start_dev_server(backend_dir: &PathBuf) -> Option<Child> {
     #[allow(unused_mut)]
     let mut cmd = Command::new(&python);
     cmd.arg(&server_py).current_dir(backend_dir);
+    cmd.env("LD_LIBRARY_PATH", cuda_lib_path(backend_dir));
     #[cfg(target_os = "windows")]
     {
         use std::os::windows::process::CommandExt;
@@ -251,6 +272,8 @@ pub fn run() {
     if is_wsl() {
         // Suppress WebKitGTK GPU/EGL noise — no real GPU in WSL
         std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+        std::env::set_var("LIBGL_ALWAYS_SOFTWARE", "1");
+        std::env::set_var("MESA_LOADER_DRIVER_OVERRIDE", "llvmpipe");
         // Point PulseAudio at WSLg's audio bridge to Windows audio drivers
         std::env::set_var("PULSE_SERVER", "unix:/mnt/wslg/PulseServer");
         // Suppress GStreamer debug spam (ALSA/PipeWire probing errors still come

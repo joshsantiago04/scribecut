@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import Titlebar from "./components/Titlebar";
 import Sidebar from "./components/Sidebar";
@@ -136,7 +136,7 @@ export default function App() {
                 .map((fp) => ({
                     name: fp.split(/[\\/]/).pop(),
                     path: fp,
-                    url: `${API}/stream?path=${encodeURIComponent(fp)}`,
+                    url: convertFileSrc(fp),
                     status: "pending",
                     segments: [],
                 }));

@@ -1,10 +1,23 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import uvicorn
 import subprocess
+import sys
 import os
+
+
+def get_ffmpeg_exe():
+    """Locate the ffmpeg binary whether running normally or frozen by PyInstaller."""
+    if getattr(sys, 'frozen', False):
+        binaries_dir = os.path.join(sys._MEIPASS, 'imageio_ffmpeg', 'binaries')
+        if os.path.isdir(binaries_dir):
+            for fname in os.listdir(binaries_dir):
+                if 'ffmpeg' in fname.lower():
+                    return os.path.join(binaries_dir, fname)
+    import imageio_ffmpeg
+    return imageio_ffmpeg.get_ffmpeg_exe()
 
 app = FastAPI()
 
@@ -58,14 +71,6 @@ class SearchRequest(BaseModel):
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
-
-@app.get("/stream")
-def stream_video(path: str):
-    """Serve a local video file. FileResponse handles Range requests natively."""
-    if not os.path.exists(path):
-        raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(path)
-
 
 @app.get("/capabilities")
 def capabilities():
@@ -126,7 +131,7 @@ async def waveform(req: WaveformRequest):
     import imageio_ffmpeg
 
     def compute():
-        ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+        ffmpeg = get_ffmpeg_exe()
         # 100 Hz mono is enough for waveform display and keeps data tiny
         # (a 1-hour video = ~360KB vs ~317MB at 22050Hz)
         result = subprocess.run(

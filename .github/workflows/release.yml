@@ -37,8 +37,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
 
       # ── Build ───────────────────────────────────────────────────────────────
+      - name: Write build config
+        run: |
+          echo '{"bundle":{"targets":["nsis","msi"],"resources":{"../backend/dist/server.exe":"backend/server.exe"}}}' > build-config.json
+
       - name: Build Tauri app
-        run: npm run tauri:build -- --config '{"bundle":{"targets":["nsis","msi"],"resources":{"../backend/dist/server.exe":"backend/server.exe"}}}'
+        run: npm run tauri:build -- --config build-config.json
 
       # ── Upload to GitHub release ────────────────────────────────────────────
       - name: Upload to release
@@ -78,8 +82,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
 
       # ── Build ───────────────────────────────────────────────────────────────
+      - name: Write build config
+        run: |
+          echo '{"bundle":{"targets":["dmg"],"resources":{"../backend/dist/server":"backend/server"}}}' > build-config.json
+
       - name: Build Tauri app
-        run: npm run tauri:build -- --config '{"bundle":{"targets":["dmg"],"resources":{"../backend/dist/server":"backend/server"}}}'
+        run: npm run tauri:build -- --config build-config.json
 
       # ── Upload to GitHub release ────────────────────────────────────────────
       - name: Upload to release

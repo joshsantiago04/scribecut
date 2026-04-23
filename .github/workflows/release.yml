@@ -168,6 +168,7 @@ jobs:
           WIN_URL="https://downloads.hajolabs.com/scribecut/releases/$VERSION/ScribeCut_${V}_x64-setup.nsis.zip"
           MAC_URL="https://downloads.hajolabs.com/scribecut/releases/$VERSION/ScribeCut_${V}_aarch64.app.tar.gz"
 
+          export V="$V"
           python3 - <<PYEOF
           import json, os
           data = {
@@ -187,9 +188,6 @@ jobs:
               json.dump(data, f, indent=2)
           print(json.dumps(data, indent=2))
           PYEOF
-        env:
-          VERSION: ${{ github.ref_name }}
-          V: ${{ github.ref_name }}
 
       - name: Upload latest.json to R2
         env:

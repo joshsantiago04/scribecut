@@ -115,7 +115,7 @@ jobs:
         with:
           name: mac-artifacts
           path: staging/
-            src-tauri/target/release/bundle/macos/*.app.tar.gz.sig
+          if-no-files-found: error
 
   publish:
     needs: [release-windows, release-mac]
@@ -173,10 +173,10 @@ jobs:
           PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
           WIN_SIG=$(cat artifacts/windows/*.nsis.zip.sig 2>/dev/null || echo "")
-          MAC_SIG=$(cat artifacts/mac/*.app.tar.gz.sig 2>/dev/null || cat artifacts/mac/*.dmg.sig 2>/dev/null || echo "")
+          MAC_SIG=$(cat artifacts/mac/*.dmg.sig 2>/dev/null || echo "")
 
           WIN_URL="https://downloads.hajolabs.com/scribecut/releases/$VERSION/ScribeCut_${V}_x64-setup.nsis.zip"
-          MAC_URL="https://downloads.hajolabs.com/scribecut/releases/$VERSION/ScribeCut_${V}_aarch64.app.tar.gz"
+          MAC_URL="https://downloads.hajolabs.com/scribecut/releases/$VERSION/ScribeCut_${V}_aarch64.dmg"
 
           export V="$V"
           python3 - <<PYEOF

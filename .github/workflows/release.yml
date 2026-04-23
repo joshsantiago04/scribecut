@@ -148,18 +148,37 @@ jobs:
         run: |
           V="${VERSION#v}"
 
-          # Windows — upload .exe for fresh installs, .nsis.zip for in-app updates
-          WIN_EXE=$(ls artifacts/windows/*.exe | grep -v nsis | head -1)
-          WIN_ZIP=$(ls artifacts/windows/*.nsis.zip | head -1)
-          aws s3 cp "$WIN_EXE"  "s3://hajolabs-downloads/scribecut/releases/$VERSION/ScribeCut_${V}_x64-setup.exe"       --endpoint-url "$R2_ENDPOINT"
-          aws s3 cp "$WIN_EXE"  "s3://hajolabs-downloads/scribecut/latest/ScribeCut_setup.exe"                           --endpoint-url "$R2_ENDPOINT"
-          aws s3 cp "$WIN_ZIP"  "s3://hajolabs-downloads/scribecut/releases/$VERSION/ScribeCut_${V}_x64-setup.nsis.zip"  --endpoint-url "$R2_ENDPOINT"
+          echo "=== Windows artifacts ==="
+          ls -la artifacts/windows/ || true
+          echo "=== Mac artifacts ==="
+          ls -la artifacts/mac/ || true
 
-          # Mac — upload .dmg for fresh installs, .app.tar.gz for in-app updates
-          MAC_DMG=$(ls artifacts/mac/*.dmg | head -1)
-          MAC_TAR=$(ls artifacts/mac/*.app.tar.gz 2>/dev/null | head -1)
-          aws s3 cp "$MAC_DMG"  "s3://hajolabs-downloads/scribecut/releases/$VERSION/ScribeCut_${V}_aarch64.dmg"         --endpoint-url "$R2_ENDPOINT"
-          aws s3 cp "$MAC_DMG"  "s3://hajolabs-downloads/scribecut/latest/ScribeCut.dmg"                                 --endpoint-url "$R2_ENDPOINT"
+          # Windows .exe (exclude .nsis.zip which also ends in zip not exe, but be safe)
+          WIN_EXE=$(find artifacts/windows -name "*.exe" ! -name "*.nsis.zip" | head -1)
+          WIN_ZIP=$(find artifacts/windows -name "*.nsis.zip" | head -1)
+
+          if [ -n "$WIN_EXE" ]; then
+            aws s3 cp "$WIN_EXE" "s3://hajolabs-downloads/scribecut/releases/$VERSION/ScribeCut_${V}_x64-setup.exe" --endpoint-url "$R2_ENDPOINT"
+            aws s3 cp "$WIN_EXE" "s3://hajolabs-downloads/scribecut/latest/ScribeCut_setup.exe"                     --endpoint-url "$R2_ENDPOINT"
+          else
+            echo "WARNING: No Windows .exe found"
+          fi
+
+          if [ -n "$WIN_ZIP" ]; then
+            aws s3 cp "$WIN_ZIP" "s3://hajolabs-downloads/scribecut/releases/$VERSION/ScribeCut_${V}_x64-setup.nsis.zip" --endpoint-url "$R2_ENDPOINT"
+          else
+            echo "WARNING: No .nsis.zip found (updater signing may be disabled)"
+          fi
+
+          # Mac
+          MAC_DMG=$(find artifacts/mac -name "*.dmg" | head -1)
+
+          if [ -n "$MAC_DMG" ]; then
+            aws s3 cp "$MAC_DMG" "s3://hajolabs-downloads/scribecut/releases/$VERSION/ScribeCut_${V}_aarch64.dmg" --endpoint-url "$R2_ENDPOINT"
+            aws s3 cp "$MAC_DMG" "s3://hajolabs-downloads/scribecut/latest/ScribeCut.dmg"                         --endpoint-url "$R2_ENDPOINT"
+          else
+            echo "WARNING: No Mac .dmg found"
+          fi
           if [ -n "$MAC_TAR" ]; then
             aws s3 cp "$MAC_TAR" "s3://hajolabs-downloads/scribecut/releases/$VERSION/ScribeCut_${V}_aarch64.app.tar.gz" --endpoint-url "$R2_ENDPOINT"
           fi

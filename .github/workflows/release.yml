@@ -42,17 +42,21 @@ jobs:
           echo '{"bundle":{"targets":["nsis","msi"],"resources":{"../backend/dist/server.exe":"backend/server.exe"}}}' > build-config.json
 
       - name: Build Tauri app
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npm run tauri:build -- --config build-config.json
 
-      # ── Upload to GitHub release ────────────────────────────────────────────
-      - name: Upload to release
-        uses: softprops/action-gh-release@v2
+      # ── Collect artifacts ───────────────────────────────────────────────────
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
         with:
-          draft: true
-          name: "ScribeCut ${{ github.ref_name }}"
-          files: |
-            src-tauri/target/release/bundle/**/*.exe
-            src-tauri/target/release/bundle/**/*.msi
+          name: windows-artifacts
+          path: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/nsis/*.nsis.zip
+            src-tauri/target/release/bundle/nsis/*.nsis.zip.sig
+            src-tauri/target/release/bundle/msi/*.msi
 
   release-mac:
     runs-on: macos-latest
@@ -87,13 +91,122 @@ jobs:
           echo '{"bundle":{"targets":["dmg"],"resources":{"../backend/dist/server":"backend/server"}}}' > build-config.json
 
       - name: Build Tauri app
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npm run tauri:build -- --config build-config.json
 
-      # ── Upload to GitHub release ────────────────────────────────────────────
-      - name: Upload to release
+      # ── Collect artifacts ───────────────────────────────────────────────────
+      - name: Upload Mac artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-artifacts
+          path: |
+            src-tauri/target/release/bundle/dmg/*.dmg
+            src-tauri/target/release/bundle/dmg/*.dmg.sig
+            src-tauri/target/release/bundle/macos/*.app.tar.gz
+            src-tauri/target/release/bundle/macos/*.app.tar.gz.sig
+
+  publish:
+    needs: [release-windows, release-mac]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-artifacts
+          path: artifacts/windows/
+
+      - name: Download Mac artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: mac-artifacts
+          path: artifacts/mac/
+
+      # ── Upload to R2 ────────────────────────────────────────────────────────
+      - name: Configure AWS CLI for R2
+        run: |
+          aws configure set aws_access_key_id ${{ secrets.R2_ACCESS_KEY_ID }}
+          aws configure set aws_secret_access_key ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          aws configure set default.region auto
+
+      - name: Upload installers and update bundles to R2
+        env:
+          R2_ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          VERSION: ${{ github.ref_name }}
+        run: |
+          V="${VERSION#v}"
+
+          # Windows — upload .exe for fresh installs, .nsis.zip for in-app updates
+          WIN_EXE=$(ls artifacts/windows/*.exe | grep -v nsis | head -1)
+          WIN_ZIP=$(ls artifacts/windows/*.nsis.zip | head -1)
+          aws s3 cp "$WIN_EXE"  "s3://hajolabs-downloads/scribecut/releases/$VERSION/ScribeCut_${V}_x64-setup.exe"       --endpoint-url "$R2_ENDPOINT"
+          aws s3 cp "$WIN_EXE"  "s3://hajolabs-downloads/scribecut/latest/ScribeCut_setup.exe"                           --endpoint-url "$R2_ENDPOINT"
+          aws s3 cp "$WIN_ZIP"  "s3://hajolabs-downloads/scribecut/releases/$VERSION/ScribeCut_${V}_x64-setup.nsis.zip"  --endpoint-url "$R2_ENDPOINT"
+
+          # Mac — upload .dmg for fresh installs, .app.tar.gz for in-app updates
+          MAC_DMG=$(ls artifacts/mac/*.dmg | head -1)
+          MAC_TAR=$(ls artifacts/mac/*.app.tar.gz 2>/dev/null | head -1)
+          aws s3 cp "$MAC_DMG"  "s3://hajolabs-downloads/scribecut/releases/$VERSION/ScribeCut_${V}_aarch64.dmg"         --endpoint-url "$R2_ENDPOINT"
+          aws s3 cp "$MAC_DMG"  "s3://hajolabs-downloads/scribecut/latest/ScribeCut.dmg"                                 --endpoint-url "$R2_ENDPOINT"
+          if [ -n "$MAC_TAR" ]; then
+            aws s3 cp "$MAC_TAR" "s3://hajolabs-downloads/scribecut/releases/$VERSION/ScribeCut_${V}_aarch64.app.tar.gz" --endpoint-url "$R2_ENDPOINT"
+          fi
+
+      # ── Generate and upload latest.json for the in-app updater ─────────────
+      - name: Generate latest.json
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          V="${VERSION#v}"
+          PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          WIN_SIG=$(cat artifacts/windows/*.nsis.zip.sig 2>/dev/null || echo "")
+          MAC_SIG=$(cat artifacts/mac/*.app.tar.gz.sig 2>/dev/null || cat artifacts/mac/*.dmg.sig 2>/dev/null || echo "")
+
+          WIN_URL="https://downloads.hajolabs.com/scribecut/releases/$VERSION/ScribeCut_${V}_x64-setup.nsis.zip"
+          MAC_URL="https://downloads.hajolabs.com/scribecut/releases/$VERSION/ScribeCut_${V}_aarch64.app.tar.gz"
+
+          python3 - <<PYEOF
+          import json, os
+          data = {
+              "version": os.environ["V"],
+              "notes": f"ScribeCut {os.environ['VERSION']}",
+              "pub_date": "$PUB_DATE",
+              "platforms": {}
+          }
+          win_sig = """$WIN_SIG""".strip()
+          mac_sig = """$MAC_SIG""".strip()
+          if win_sig:
+              data["platforms"]["windows-x86_64"] = {"signature": win_sig, "url": "$WIN_URL"}
+          if mac_sig:
+              data["platforms"]["darwin-aarch64"] = {"signature": mac_sig, "url": "$MAC_URL"}
+              data["platforms"]["darwin-x86_64"]  = {"signature": mac_sig, "url": "$MAC_URL"}
+          with open("latest.json", "w") as f:
+              json.dump(data, f, indent=2)
+          print(json.dumps(data, indent=2))
+          PYEOF
+        env:
+          VERSION: ${{ github.ref_name }}
+          V: ${{ github.ref_name }}
+
+      - name: Upload latest.json to R2
+        env:
+          R2_ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+        run: |
+          aws s3 cp latest.json "s3://hajolabs-downloads/scribecut/latest.json" \
+            --endpoint-url "$R2_ENDPOINT" \
+            --content-type "application/json" \
+            --cache-control "no-cache"
+
+      # ── GitHub Release ───────────────────────────────────────────────────────
+      - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
           draft: true
           name: "ScribeCut ${{ github.ref_name }}"
           files: |
-            src-tauri/target/release/bundle/**/*.dmg
+            artifacts/windows/*.exe
+            artifacts/windows/*.msi
+            artifacts/mac/*.dmg

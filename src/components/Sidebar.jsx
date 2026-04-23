@@ -10,6 +10,7 @@ export default function Sidebar({
     useGpu,
     onGpuChange,
     cudaAvailable,
+    gpuName,
 }) {
     const active = activeVideo >= 0 ? videos[activeVideo] : null;
 
@@ -86,7 +87,14 @@ export default function Sidebar({
                 </div>
                 <div className="setting-row">
                     <label className={`setting-label ${!cudaAvailable ? "setting-label--dim" : ""}`}>
-                        GPU {!cudaAvailable && <span className="setting-na">(N/A)</span>}
+                        GPU
+                        {cudaAvailable && gpuName ? (
+                            <span className="setting-gpu-name" title={gpuName}>
+                                {gpuName.replace(/NVIDIA\s*/i, "").replace(/GeForce\s*/i, "")}
+                            </span>
+                        ) : !cudaAvailable ? (
+                            <span className="setting-na">(N/A)</span>
+                        ) : null}
                     </label>
                     <label className="toggle">
                         <input

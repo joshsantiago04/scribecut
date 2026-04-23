@@ -34,31 +34,46 @@ _model = None
 _model_cfg = None  # (model_name, device)
 
 def _get_model(model_name: str = "small", device: str = "cpu"):
+    """Returns (model, actual_device). actual_device may differ from device if CUDA fallback occurred."""
     global _model, _model_cfg
     cfg = (model_name, device)
     if _model is None or _model_cfg != cfg:
         compute_type = "float16" if device == "cuda" else "int8"
-        _model = WhisperModel(model_name, device=device, compute_type=compute_type)
-        _model_cfg = cfg
-    return _model
+        actual_device = device
+        try:
+            new_model = WhisperModel(model_name, device=device, compute_type=compute_type)
+        except Exception as e:
+            if device == "cuda":
+                import logging
+                logging.warning(f"CUDA model load failed ({e}), falling back to CPU")
+                new_model = WhisperModel(model_name, device="cpu", compute_type="int8")
+                actual_device = "cpu"
+            else:
+                raise
+        _model = new_model
+        _model_cfg = (model_name, actual_device)
+    return _model, _model_cfg[1]
 
 
-def check_cuda() -> bool:
+def check_cuda() -> dict:
+    """Returns {'available': bool, 'name': str | None}."""
     try:
-        import subprocess
         result = subprocess.run(
-            ["nvidia-smi"],
+            ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
             capture_output=True,
             timeout=5,
+            text=True,
         )
         if result.returncode != 0:
-            return False
-        # Also verify ctranslate2 has CUDA support compiled in
+            return {"available": False, "name": None}
+        gpu_name = result.stdout.strip().split("\n")[0].strip() or None
         import ctranslate2
         types = ctranslate2.get_supported_compute_types("cuda")
-        return bool(types)
+        if not types:
+            return {"available": False, "name": None}
+        return {"available": True, "name": gpu_name}
     except Exception:
-        return False
+        return {"available": False, "name": None}
 
 
 def extract_audio(video_path: str) -> str:
@@ -85,12 +100,17 @@ def extract_audio(video_path: str) -> str:
 
 
 def transcribe_stream(video_path: str, model_name: str = "small", device: str = "cpu"):
-    """Yields {'type': 'info', 'duration': float} first, then
-    {'type': 'segment', 'start', 'end', 'text'} for each segment.
+    """Yields events in order:
+    - {'type': 'warning', 'detail': str}  — only if GPU requested but CPU fallback used
+    - {'type': 'info', 'duration': float}
+    - {'type': 'segment', 'start', 'end', 'text'}  — one per segment
     Caller is responsible for running this in a thread."""
     wav_path = extract_audio(video_path)
     try:
-        segments, info = _get_model(model_name, device).transcribe(
+        model, actual_device = _get_model(model_name, device)
+        if actual_device != device:
+            yield {"type": "warning", "detail": "GPU unavailable — transcribing on CPU instead."}
+        segments, info = model.transcribe(
             wav_path,
             beam_size=5,
             condition_on_previous_text=False,

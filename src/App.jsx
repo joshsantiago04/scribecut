@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { check as checkUpdate } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
 import Titlebar from "./components/Titlebar";
 import Sidebar from "./components/Sidebar";
 import VideoPlayer from "./components/VideoPlayer";
@@ -26,7 +28,10 @@ export default function App() {
     const [transcribeModel, setTranscribeModel] = useState("small");
     const [useGpu, setUseGpu] = useState(false);
     const [cudaAvailable, setCudaAvailable] = useState(false);
+    const [gpuName, setGpuName] = useState(null);
     const [transcribeProgress, setTranscribeProgress] = useState(null); // 0-100 or null
+    const [pendingUpdate, setPendingUpdate] = useState(null); // { version, update }
+    const [updateInstalling, setUpdateInstalling] = useState(false);
 
     const videoRef = useRef(null);
 
@@ -40,11 +45,34 @@ export default function App() {
         });
     }, []);
 
+    // Check for app updates on startup (only runs in packaged Tauri build)
+    useEffect(() => {
+        checkUpdate()
+            .then((update) => {
+                if (update?.available) setPendingUpdate({ version: update.version, update });
+            })
+            .catch(() => {});
+    }, []);
+
+    const handleInstallUpdate = async () => {
+        if (!pendingUpdate) return;
+        setUpdateInstalling(true);
+        try {
+            await pendingUpdate.update.downloadAndInstall();
+            await relaunch();
+        } catch {
+            setUpdateInstalling(false);
+        }
+    };
+
     // Check GPU availability once on startup
     useEffect(() => {
         fetch(`${API}/capabilities`)
             .then((r) => r.json())
-            .then((data) => setCudaAvailable(data.cuda))
+            .then((data) => {
+                setCudaAvailable(data.cuda);
+                setGpuName(data.gpu_name || null);
+            })
             .catch(() => {});
     }, []);
 
@@ -186,7 +214,9 @@ export default function App() {
                 for (const line of lines) {
                     if (!line.startsWith("data: ")) continue;
                     const event = JSON.parse(line.slice(6));
-                    if (event.type === "info") {
+                    if (event.type === "warning") {
+                        setMessages([{ type: "system", text: `Warning: ${event.detail}` }]);
+                    } else if (event.type === "info") {
                         duration = event.duration;
                     } else if (event.type === "segment") {
                         collected.push({ start: event.start, end: event.end, text: event.text });
@@ -322,6 +352,19 @@ export default function App() {
     return (
         <>
             <Titlebar />
+            {pendingUpdate && (
+                <div className="update-banner">
+                    <span>ScribeCut {pendingUpdate.version} is available</span>
+                    <button
+                        className="update-banner-btn"
+                        onClick={handleInstallUpdate}
+                        disabled={updateInstalling}
+                    >
+                        {updateInstalling ? "Installing..." : "Update & Restart"}
+                    </button>
+                    <button className="update-banner-dismiss" onClick={() => setPendingUpdate(null)}>✕</button>
+                </div>
+            )}
             <Sidebar
                 videos={videos}
                 activeVideo={activeVideo}
@@ -334,9 +377,9 @@ export default function App() {
                 useGpu={useGpu}
                 onGpuChange={setUseGpu}
                 cudaAvailable={cudaAvailable}
+                gpuName={gpuName}
             />
-            <VideoPlayer ref={videoRef} src={videoSrc} peaks={waveformPeaks} />
-            <div className="bottom-resizer" onMouseDown={handleResizerMouseDown} />
+            <VideoPlayer ref={videoRef} src={videoSrc} peaks={waveformPeaks} onRegionAdd={handleAddToExport} onResizerMouseDown={handleResizerMouseDown} />
             <SearchPanel
                 query={searchQuery}
                 onQueryChange={setSearchQuery}

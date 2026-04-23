@@ -1,13 +1,17 @@
+import { useState, useRef } from "react";
+
 function formatTime(seconds) {
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
-    const s = Math.floor(seconds % 60);
-    return [h, m, s].map((n) => String(n).padStart(2, "0")).join(":");
+    const s = (seconds % 60).toFixed(1);
+    const hh = h > 0 ? `${h}:` : "";
+    return `${hh}${String(m).padStart(h > 0 ? 2 : 1, "0")}:${s.padStart(4, "0")}`;
 }
 
 function parseTime(str) {
     const parts = str.split(":").map(Number);
-    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + (parts[2] || 0);
+    if (parts.length === 3)
+        return parts[0] * 3600 + parts[1] * 60 + (parts[2] || 0);
     if (parts.length === 2) return parts[0] * 60 + (parts[1] || 0);
     return parseFloat(str) || 0;
 }
@@ -23,10 +27,38 @@ export default function SearchPanel({
     onRemoveClip,
     onExport,
 }) {
+    const [searchHeight, setSearchHeight] = useState(260);
+    const containerRef = useRef(null);
+
+    const handleResizerMouseDown = (e) => {
+        e.preventDefault();
+        const startY = e.clientY;
+        const startH = searchHeight;
+
+        const onMove = (e) => {
+            const totalH = containerRef.current?.clientHeight ?? 600;
+            const delta = e.clientY - startY;
+            const clamped = Math.max(
+                80,
+                Math.min(totalH - 160, startH + delta),
+            );
+            setSearchHeight(clamped);
+        };
+        const onUp = () => {
+            window.removeEventListener("mousemove", onMove);
+            window.removeEventListener("mouseup", onUp);
+        };
+        window.addEventListener("mousemove", onMove);
+        window.addEventListener("mouseup", onUp);
+    };
+
     return (
-        <div className="right">
+        <div className="right" ref={containerRef}>
             {/* ── Top: Search ── */}
-            <div className="right-pane">
+            <div
+                className="right-pane"
+                style={{ height: searchHeight, flex: "none" }}
+            >
                 <div className="right-header">Search Transcript</div>
                 <div className="search-container">
                     <input
@@ -49,14 +81,24 @@ export default function SearchPanel({
                 </div>
             </div>
 
-            <div className="right-divider" />
+            <div
+                className="panel-resizer panel-resizer--h"
+                onMouseDown={handleResizerMouseDown}
+            >
+                <div className="panel-resizer-grip" />
+            </div>
 
             {/* ── Bottom: Export ── */}
-            <div className="right-pane export-pane">
+            <div
+                className="right-pane export-pane"
+                style={{ flex: 1, minHeight: 130 }}
+            >
                 <div className="right-header">
                     Export Clips
                     {exportQueue.length > 0 && (
-                        <span className="export-badge">{exportQueue.length}</span>
+                        <span className="export-badge">
+                            {exportQueue.length}
+                        </span>
                     )}
                 </div>
 
@@ -72,7 +114,13 @@ export default function SearchPanel({
                                     <input
                                         className="clip-name-input"
                                         defaultValue={clip.clipName}
-                                        onBlur={(e) => onUpdateClip(clip.id, "clipName", e.target.value)}
+                                        onBlur={(e) =>
+                                            onUpdateClip(
+                                                clip.id,
+                                                "clipName",
+                                                e.target.value,
+                                            )
+                                        }
                                         title="Rename clip"
                                     />
                                     <button
@@ -84,24 +132,38 @@ export default function SearchPanel({
                                 </div>
                                 <div className="export-clip-times">
                                     <div className="time-field">
-                                        <label className="time-label">Start</label>
+                                        <label className="time-label">
+                                            Start
+                                        </label>
                                         <input
                                             className="time-input"
                                             key={`${clip.id}-start`}
-                                            defaultValue={formatTime(clip.start)}
+                                            defaultValue={formatTime(
+                                                clip.start,
+                                            )}
                                             onBlur={(e) =>
-                                                onUpdateClip(clip.id, "start", parseTime(e.target.value))
+                                                onUpdateClip(
+                                                    clip.id,
+                                                    "start",
+                                                    parseTime(e.target.value),
+                                                )
                                             }
                                         />
                                     </div>
                                     <div className="time-field">
-                                        <label className="time-label">End</label>
+                                        <label className="time-label">
+                                            End
+                                        </label>
                                         <input
                                             className="time-input"
                                             key={`${clip.id}-end`}
                                             defaultValue={formatTime(clip.end)}
                                             onBlur={(e) =>
-                                                onUpdateClip(clip.id, "end", parseTime(e.target.value))
+                                                onUpdateClip(
+                                                    clip.id,
+                                                    "end",
+                                                    parseTime(e.target.value),
+                                                )
                                             }
                                         />
                                     </div>
@@ -117,7 +179,10 @@ export default function SearchPanel({
                         <span className="export-dir-path" title={outputDir}>
                             {outputDir || "No folder selected"}
                         </span>
-                        <button className="export-browse-btn" onClick={onSelectOutputDir}>
+                        <button
+                            className="export-browse-btn"
+                            onClick={onSelectOutputDir}
+                        >
                             Browse
                         </button>
                     </div>
@@ -126,7 +191,8 @@ export default function SearchPanel({
                         disabled={exportQueue.length === 0 || !outputDir}
                         onClick={onExport}
                     >
-                        Export {exportQueue.length > 0
+                        Export{" "}
+                        {exportQueue.length > 0
                             ? `${exportQueue.length} clip${exportQueue.length !== 1 ? "s" : ""}`
                             : ""}
                     </button>

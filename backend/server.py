@@ -92,8 +92,8 @@ def stream_video(path: str):
 
 @app.get("/capabilities")
 def capabilities():
-    has_cuda = get_transcribe().check_cuda()
-    return {"cuda": has_cuda}
+    info = get_transcribe().check_cuda()
+    return {"cuda": info["available"], "gpu_name": info.get("name")}
 
 
 @app.post("/transcribe")

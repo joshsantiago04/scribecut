@@ -53,6 +53,11 @@ release/
 .env
 .env.local
 
+# Tauri signing key — never commit this
+*.key
+*.key.pub
+build-config.json
+
 # Videos & uploads
 uploads/
 videos/

@@ -11,6 +11,6 @@
     "core:window:allow-close",
     "core:window:allow-show",
     "updater:default",
-    "process:allow-relaunch"
+    "process:allow-restart"
   ]
 }
